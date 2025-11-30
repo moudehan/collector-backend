@@ -1,0 +1,50 @@
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+
+import { User } from 'src/users/user.entity';
+import { Article } from 'src/articles/article.entity';
+import { FraudAlert, FraudSeverity } from 'src/fraud/fraud-alert.entity';
+import { ChatMessage } from 'src/chat/chat-message.entity';
+
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { Roles } from 'src/auth/roles.decorator';
+import { RolesGuard } from 'src/auth/roles.guard';
+import { UserRole } from 'src/users/user.entity';
+
+@Controller('admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
+export class AdminController {
+  constructor(
+    @InjectRepository(User) private usersRepo: Repository<User>,
+    @InjectRepository(Article) private articleRepo: Repository<Article>,
+    @InjectRepository(FraudAlert) private alertsRepo: Repository<FraudAlert>,
+    @InjectRepository(ChatMessage) private chatRepo: Repository<ChatMessage>,
+  ) {}
+
+  @Get('stats')
+  async getStats() {
+    const users = await this.usersRepo.count();
+    const articles = await this.articleRepo.count();
+    const alerts = await this.alertsRepo.count();
+    const messages = await this.chatRepo.count();
+
+    const highAlerts = await this.alertsRepo.count({
+      where: { severity: FraudSeverity.HIGH },
+    });
+
+    const mediumAlerts = await this.alertsRepo.count({
+      where: { severity: FraudSeverity.MEDIUM },
+    });
+
+    return {
+      counters: { users, articles, alerts, messages },
+      fraud: {
+        high: highAlerts,
+        medium: mediumAlerts,
+        riskIndex: highAlerts * 2 + mediumAlerts,
+      },
+    };
+  }
+}
