@@ -1,12 +1,12 @@
+import { Article } from 'src/articles/article.entity';
+import { User } from 'src/users/user.entity';
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
+  Entity,
   ManyToOne,
   OneToMany,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
-import { User } from 'src/users/user.entity';
-import { Article } from 'src/articles/article.entity';
 
 @Entity('shops')
 export class Shop {
@@ -16,18 +16,25 @@ export class Shop {
   @Column()
   name: string;
 
-  @Column()
-  description: string;
+  @Column({ nullable: true })
+  description?: string;
 
-  @ManyToOne(() => User, (user) => user.shops)
+  @ManyToOne(() => User, (user) => user.shops, {
+    nullable: false,
+    eager: true,
+  })
   owner: User;
 
-  @OneToMany(() => Article, (article) => article.shop)
+  @OneToMany(() => Article, (article) => article.shop, { cascade: [] })
   articles: Article[];
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+    onUpdate: 'CURRENT_TIMESTAMP',
+  })
   updated_at: Date;
 }

@@ -12,7 +12,7 @@ export class ShopsController {
   @UseGuards(JwtAuthGuard)
   @Post()
   create(@Body() dto: CreateShopDto, @CurrentUser() user: JwtUser) {
-    return this.shopsService.createShop(dto, user.userId);
+    return this.shopsService.createShop(dto, user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
