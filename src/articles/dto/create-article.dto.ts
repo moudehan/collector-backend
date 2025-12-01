@@ -1,20 +1,26 @@
-import { IsNotEmpty, IsNumber, Min, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsNotEmpty, IsNumber, IsString, IsUUID } from 'class-validator';
 
 export class CreateArticleDto {
-  @IsNotEmpty()
+  @IsString()
+  @IsNotEmpty({ message: 'Le titre est obligatoire' })
   title: string;
 
-  @IsNotEmpty()
-  @MaxLength(500)
+  @IsString()
+  @IsNotEmpty({ message: 'La description est obligatoire' })
   description: string;
 
-  @IsNumber()
-  @Min(1)
+  @Type(() => Number)
+  @IsNumber({}, { message: 'Le prix doit être un nombre' })
   price: number;
 
-  @IsNumber()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'Les frais de livraison doivent être un nombre' })
   shipping_cost: number;
 
-  @IsNotEmpty()
+  @IsUUID(undefined, { message: 'Un shopId valide est requis' })
   shopId: string;
+
+  @IsUUID(undefined, { message: 'Une catégorie valide est requise' })
+  categoryId: string;
 }

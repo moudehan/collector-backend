@@ -1,11 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateArticleDto } from 'src/articles/dto/create-article.dto';
+import { Category } from 'src/categories/category.entity';
 import { FraudService } from 'src/fraud/fraud.service';
 import {
   Notification,
   NotificationType,
 } from 'src/notifications/notification.entity';
+import { Shop } from 'src/shops/shop.entity';
+import { User } from 'src/users/user.entity';
 import { Repository } from 'typeorm';
 import { ArticleLike } from './article-like.entity';
 import { Article, ArticleStatus } from './article.entity';
@@ -21,20 +28,23 @@ export class ArticlesService {
     private fraudService: FraudService,
   ) {}
 
-  create(dto: CreateArticleDto, userId: string) {
-    const article = this.repo.create({
-      title: dto.title,
-      description: dto.description,
-      price: dto.price,
-      shipping_cost: dto.shipping_cost,
-      shop: { id: dto.shopId },
-      seller: { id: userId },
-      status: ArticleStatus.PENDING,
-    });
+  async create(dto: CreateArticleDto, userId: string) {
+    if (!dto.categoryId) throw new BadRequestException('categoryId est requis');
+    if (!dto.shopId) throw new BadRequestException('shopId est requis');
+
+    const article = new Article();
+    article.title = dto.title;
+    article.description = dto.description;
+    article.price = Number(dto.price);
+    article.shipping_cost = Number(dto.shipping_cost);
+    article.status = ArticleStatus.PENDING;
+
+    article.seller = { id: userId } as User;
+    article.shop = { id: dto.shopId } as Shop;
+    article.category = { id: dto.categoryId } as Category;
 
     return this.repo.save(article);
   }
-
   findMine(userId: string) {
     return this.repo.find({
       where: { seller: { id: userId } },

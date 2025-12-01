@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Category } from 'src/categories/category.entity';
 import { Shop } from 'src/shops/shop.entity';
 import { User } from 'src/users/user.entity';
+import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 
 export enum ArticleStatus {
   PENDING = 'pending',
@@ -37,6 +38,13 @@ export class Article {
     default: ArticleStatus.PENDING,
   })
   status: ArticleStatus;
+
+  @ManyToOne(() => Category, (category) => category.articles, {
+    onDelete: 'RESTRICT',
+    nullable: false,
+    eager: true,
+  })
+  category: Category;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
