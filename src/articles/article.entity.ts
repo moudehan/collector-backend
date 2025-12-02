@@ -1,7 +1,14 @@
 import { Category } from 'src/categories/category.entity';
 import { Shop } from 'src/shops/shop.entity';
 import { User } from 'src/users/user.entity';
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { ArticleLike } from './article-like.entity';
 
 export enum ArticleStatus {
   PENDING = 'pending',
@@ -45,6 +52,12 @@ export class Article {
     eager: true,
   })
   category: Category;
+
+  @OneToMany(() => ArticleLike, (like) => like.article)
+  likes: ArticleLike[];
+
+  @Column({ default: 0 })
+  likesCount: number;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;

@@ -24,13 +24,13 @@ export class ArticlesController {
   @UseGuards(JwtAuthGuard)
   @Post()
   create(@Body() dto: CreateArticleDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.userId);
+    return this.service.create(dto, user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('mine')
   myArticles(@CurrentUser() user: JwtUser) {
-    return this.service.findMine(user.userId);
+    return this.service.findMine(user.sub);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -55,13 +55,13 @@ export class ArticlesController {
   @UseGuards(JwtAuthGuard)
   @Post(':id/follow')
   follow(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.follow(id, user.userId);
+    return this.service.follow(id, user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete(':id/follow')
   unfollow(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.unfollow(id, user.userId);
+    return this.service.unfollow(id, user.sub);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -69,5 +69,17 @@ export class ArticlesController {
   @Patch(':id/price/:newPrice')
   updatePrice(@Param('id') id: string, @Param('newPrice') newPrice: string) {
     return this.service.updatePrice(id, Number(newPrice));
+  }
+
+  @Get('recommendations')
+  @UseGuards(JwtAuthGuard)
+  getRecommendations(@CurrentUser() user: JwtUser) {
+    return this.service.getRecommendations(user.userId, user.role);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('following')
+  getFollowing(@CurrentUser() user: JwtUser) {
+    return this.service.getFollowing(user.userId);
   }
 }

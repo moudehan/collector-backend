@@ -11,6 +11,7 @@
 <a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
 <a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
 <a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
+<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
 <a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
 <a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
 <a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
@@ -64,7 +65,7 @@ When you're ready to deploy your NestJS application to production, there are som
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
 
 ```bash
-$ npm install -g @nestjs/mau
+$ npm install -g mau
 $ mau deploy
 ```
 
@@ -96,3 +97,94 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## initialiser le git
+
+git init
+git add .
+git commit -m "chore: initial NestJS project"
+
+## Installer les dépendances pour la config & la DB (TypeORM + Postgres),
+
+npm install @nestjs/config @nestjs/typeorm typeorm pg
+npm install class-validator class-transformer
+
+## Créer le fichier .env
+
+## Configurer ConfigModule et TypeOrmModule dans AppModule dans src/app.module.ts
+
+## Activer la validation globale des DTO (bonne pratique, obligée pour ton bloc qualité/sécurité) dans src/main.ts,
+
+## Démarrer PostgreSQL avec Docker
+
+docker run -d \
+  --name collector-postgres \
+  -e POSTGRES_USER=collector_user \
+  -e POSTGRES_PASSWORD=collector_password \
+  -e POSTGRES_DB=collector_db \
+  -p 5433:5432 \
+  postgres:14
+
+
+## Génération automatique des modules
+
+nest g module users
+nest g module auth
+nest g module shops
+nest g module articles
+
+## Créer les ENTITÉS TYPEORM
+
+user.entity.ts
+shop.entity.ts
+article.entity.ts
+
+## Installer les dépendances nécessaires pour l'authentification JWT
+
+npm install @nestjs/jwt @nestjs/passport passport passport-jwt bcrypt
+npm install -D @types/bcrypt
+
+## Créer l’entité User DTO (validation formulaires)
+
+register.dto.ts
+login.dto.ts
+
+## Créer le AuthService et le Controller Auth
+
+auth.service.ts
+auth.controller.ts
+
+## Configurer JWT
+
+auth.module.ts
+
+## Création du guard JwtAuthGuard pour la Protection des routes + AuthGuard JWT
+
+jwt-auth.guard.ts
+jwt.strategy.ts
+
+## Créer un décorateur pour récupérer l'utilisateur connecté
+
+user.decorator.ts
+
+## Créer le AuthService et le Controller Shops
+
+shops.controller.ts
+create-shop.dto.ts
+shops.service.ts
+shops.module.ts
+
+## Créer le AuthService et le Controller Articles
+
+articles.controller.ts
+create-article.dto.ts
+articles.service.ts
+articles.module.ts
+
+## Création des entités supplémentaires pour l'historique des pris, les followers d'un article , et les notif pour changement dans un article
+
+## Création de l’entity FraudAlert
+
+## Création des entités de chat aevc WebSocket Gateway
+
+##

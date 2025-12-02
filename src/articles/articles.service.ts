@@ -29,19 +29,40 @@ export class ArticlesService {
   ) {}
 
   async create(dto: CreateArticleDto, userId: string) {
-    if (!dto.categoryId) throw new BadRequestException('categoryId est requis');
-    if (!dto.shopId) throw new BadRequestException('shopId est requis');
+    if (!dto.categoryId) {
+      throw new BadRequestException({ message: 'categoryId est requis' });
+    }
 
-    const article = new Article();
-    article.title = dto.title;
-    article.description = dto.description;
-    article.price = Number(dto.price);
-    article.shipping_cost = Number(dto.shipping_cost);
-    article.status = ArticleStatus.PENDING;
+    if (!dto.shopId) {
+      throw new BadRequestException({ message: 'shopId est requis' });
+    }
 
-    article.seller = { id: userId } as User;
-    article.shop = { id: dto.shopId } as Shop;
-    article.category = { id: dto.categoryId } as Category;
+    const existing = await this.repo.findOne({
+      where: {
+        title: dto.title,
+        seller: { id: userId },
+        shop: { id: dto.shopId },
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException({
+        success: false,
+        message:
+          'Vous avez déjà créé un article avec ce titre dans cette boutique.',
+      });
+    }
+
+    const article = this.repo.create({
+      title: dto.title,
+      description: dto.description,
+      price: Number(dto.price),
+      shipping_cost: Number(dto.shipping_cost),
+      status: ArticleStatus.PENDING,
+      seller: { id: userId } as User,
+      shop: { id: dto.shopId } as Shop,
+      category: { id: dto.categoryId } as Category,
+    });
 
     return this.repo.save(article);
   }
@@ -52,8 +73,30 @@ export class ArticlesService {
     });
   }
 
-  approve(id: string) {
-    return this.repo.update(id, { status: ArticleStatus.APPROVED });
+  async approve(id: string) {
+    const article = await this.repo.findOne({ where: { id } });
+
+    if (!article) {
+      throw new NotFoundException('Article introuvable.');
+    }
+
+    if (article.status === ArticleStatus.APPROVED) {
+      throw new BadRequestException('Cet article est déjà approuvé.');
+    }
+
+    if (article.status === ArticleStatus.REJECTED) {
+      throw new BadRequestException(
+        'Impossible d’approuver un article déjà rejeté.',
+      );
+    }
+
+    article.status = ArticleStatus.APPROVED;
+    await this.repo.save(article);
+
+    return {
+      success: true,
+      message: 'Article approuvé avec succès.',
+    };
   }
 
   reject(id: string) {
@@ -68,17 +111,89 @@ export class ArticlesService {
   }
 
   async follow(articleId: string, userId: string) {
-    return this.likeRepo.save({
+    const article = await this.repo.findOne({ where: { id: articleId } });
+
+    if (!article) {
+      throw new NotFoundException('Article introuvable.');
+    }
+
+    if (article.status !== ArticleStatus.APPROVED) {
+      throw new BadRequestException(
+        'Vous ne pouvez suivre que des articles approuvés.',
+      );
+    }
+
+    const already = await this.likeRepo.findOne({
+      where: { article: { id: articleId }, user: { id: userId } },
+    });
+
+    if (already) {
+      return {
+        success: false,
+        message: 'Vous suivez déjà cet article.',
+      };
+    }
+
+    await this.likeRepo.insert({
       article: { id: articleId },
       user: { id: userId },
     });
+
+    await this.repo.increment({ id: articleId }, 'likesCount', 1);
+
+    return {
+      success: true,
+      message: 'Article suivi avec succès.',
+    };
   }
 
   async unfollow(articleId: string, userId: string) {
-    return this.likeRepo.delete({
+    const existing = await this.likeRepo.findOne({
+      where: { article: { id: articleId }, user: { id: userId } },
+    });
+
+    if (!existing) {
+      return {
+        success: false,
+        message: 'Vous ne suivez pas cet article.',
+      };
+    }
+
+    await this.likeRepo.delete({
       article: { id: articleId },
       user: { id: userId },
     });
+
+    await this.repo.decrement({ id: articleId }, 'likesCount', 1);
+
+    return {
+      success: true,
+      message: 'Vous ne suivez plus cet article.',
+    };
+  }
+
+  async getFollowing(userId: string) {
+    const likes = await this.likeRepo.find({
+      where: { user: { id: userId } },
+      relations: [
+        'article',
+        'article.category',
+        'article.seller',
+        'article.shop',
+      ],
+    });
+
+    const seen = new Set<string>();
+    const articles: Article[] = [];
+
+    for (const like of likes) {
+      if (!seen.has(like.article.id)) {
+        seen.add(like.article.id);
+        articles.push(like.article);
+      }
+    }
+
+    return articles;
   }
 
   async updatePrice(articleId: string, newPrice: number) {
@@ -114,5 +229,61 @@ export class ArticlesService {
       message:
         'Prix mis à jour, notifications envoyées & vérification fraude effectuée',
     };
+  }
+
+  async getRecommendations(userId: string, userRole: string) {
+    const liked = await this.likeRepo.find({
+      where: { user: { id: userId } },
+      relations: ['article', 'article.category'],
+    });
+
+    if (liked.length === 0) return [];
+
+    const categoryScore: Record<string, number> = {};
+
+    for (const like of liked) {
+      const catId = like.article.category.id;
+      categoryScore[catId] = (categoryScore[catId] || 0) + 1;
+    }
+
+    const preferredCategories = Object.keys(categoryScore).filter(
+      (catId) => categoryScore[catId] >= 2,
+    );
+
+    console.log('Category score =', categoryScore);
+    console.log('Preferred categories =', preferredCategories);
+
+    if (preferredCategories.length === 0) {
+      console.log('Aucune catégorie assez likée → pas de recommandations');
+      return [];
+    }
+
+    const likedIds = new Set(liked.map((l) => l.article.id));
+
+    const recommendations = await this.repo
+      .createQueryBuilder('article')
+      .leftJoinAndSelect('article.category', 'category')
+      .leftJoinAndSelect('article.shop', 'shop')
+      .leftJoinAndSelect('article.seller', 'seller')
+      .where('category.id IN (:...cats)', { cats: preferredCategories })
+      .andWhere('article.status = :status', { status: ArticleStatus.APPROVED }) // 🔥 seulement approuvés
+      .getMany();
+
+    console.log('RAW RECOMMENDATIONS =', recommendations);
+
+    const finalList = recommendations.filter((a) => {
+      const isLiked = likedIds.has(a.id);
+      const isOwn = a.seller?.id === userId;
+
+      if (userRole === 'admin') {
+        return !isLiked;
+      }
+
+      return !isLiked && !isOwn;
+    });
+
+    finalList.sort((a, b) => (b.likesCount ?? 0) - (a.likesCount ?? 0));
+
+    return finalList;
   }
 }

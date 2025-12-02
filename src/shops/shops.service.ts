@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Shop } from 'src/shops/shop.entity';
 import { User } from 'src/users/user.entity';
@@ -12,7 +12,20 @@ export class ShopsService {
     private readonly shopRepo: Repository<Shop>,
   ) {}
 
-  createShop(dto: CreateShopDto, userId: string) {
+  async createShop(dto: CreateShopDto, userId: string) {
+    const existing = await this.shopRepo.findOne({
+      where: {
+        name: dto.name,
+        owner: { id: userId },
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        'Vous avez déjà créé une boutique avec ce nom.',
+      );
+    }
+
     const shop = this.shopRepo.create({
       ...dto,
       owner: { id: userId } as User,
@@ -24,6 +37,17 @@ export class ShopsService {
   getShopsByUser(userId: string) {
     return this.shopRepo.find({
       where: { owner: { id: userId } },
+    });
+  }
+
+  async getAllShopsWithArticles() {
+    return this.shopRepo.find({
+      relations: ['owner', 'articles', 'articles.category', 'articles.seller'],
+      order: {
+        articles: {
+          created_at: 'DESC',
+        },
+      },
     });
   }
 }
