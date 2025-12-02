@@ -4,14 +4,21 @@ import { Article } from 'src/articles/article.entity';
 import { PriceHistory } from 'src/articles/price-history.entity';
 import { Repository } from 'typeorm';
 import { FraudAlert, FraudSeverity } from './fraud-alert.entity';
+import { FraudGateway } from './fraud.gateway';
 
 @Injectable()
 export class FraudService {
   constructor(
-    @InjectRepository(Article) private articleRepo: Repository<Article>,
+    @InjectRepository(Article)
+    private articleRepo: Repository<Article>,
+
     @InjectRepository(PriceHistory)
     private historyRepo: Repository<PriceHistory>,
-    @InjectRepository(FraudAlert) private alertRepo: Repository<FraudAlert>,
+
+    @InjectRepository(FraudAlert)
+    private alertRepo: Repository<FraudAlert>,
+
+    private readonly fraudGateway: FraudGateway,
   ) {}
 
   async checkPriceAnomaly(articleId: string, newPrice: number) {
@@ -33,27 +40,43 @@ export class FraudService {
 
     const diff = Math.abs(newPrice - median) / median;
 
-    let severity: FraudSeverity | null = null;
-    let reason: string | null = null;
-
     if (diff <= 0.1) return;
 
-    if (diff > 0.1 && diff <= 0.3) {
-      severity = FraudSeverity.MEDIUM;
-      reason = `Prix atypique (~${Math.round(diff * 100)}% d'écart par rapport au marché)`;
-    }
+    let severity: FraudSeverity;
+    let reason: string;
 
     if (diff > 0.3) {
       severity = FraudSeverity.HIGH;
-      reason = `Prix potentiellement frauduleux (~${Math.round(diff * 100)}% d'écart par rapport au marché)`;
+      reason = `Prix potentiellement frauduleux (~${Math.round(
+        diff * 100,
+      )}% d'écart par rapport au marché)`;
+    } else {
+      severity = FraudSeverity.MEDIUM;
+      reason = `Prix atypique (~${Math.round(
+        diff * 100,
+      )}% d'écart par rapport au marché)`;
     }
 
-    if (!severity || !reason) return;
-
-    await this.alertRepo.save({
+    const alert = await this.alertRepo.save({
       article: { id: articleId },
       severity,
       reason,
+      average_price: median,
+      last_price_recorded: newPrice,
+      diff_percent: Math.round(diff * 100),
     });
+
+    this.fraudGateway.emitNewAlert({
+      id: alert.id,
+      article: { id: articleId, title: history[0].article?.title },
+      severity,
+      reason,
+      average_price: median,
+      last_price_recorded: newPrice,
+      diff_percent: Math.round(diff * 100),
+      created_at: alert.created_at,
+    });
+
+    return alert;
   }
 }

@@ -21,6 +21,15 @@ export class FraudAlert {
   @Column({ type: 'enum', enum: FraudSeverity })
   severity: FraudSeverity;
 
+  @Column({ type: 'float', nullable: true })
+  average_price: number;
+
+  @Column({ type: 'float', nullable: true })
+  last_price_recorded: number;
+
+  @Column({ type: 'float', nullable: true })
+  diff_percent: number;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
 }
