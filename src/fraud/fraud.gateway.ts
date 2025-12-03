@@ -1,17 +1,22 @@
-import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
+import {
+  OnGatewayInit,
+  WebSocketGateway,
+  WebSocketServer,
+} from '@nestjs/websockets';
 import { Server } from 'socket.io';
 
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  cors: { origin: '*' },
 })
-export class FraudGateway {
+export class FraudGateway implements OnGatewayInit {
   @WebSocketServer()
   server: Server;
 
+  afterInit() {
+    console.log('Fraud Gateway initialisée');
+  }
+
   emitNewAlert(alert: any) {
-    console.log('📢 Nouvelle alerte envoyée au front !');
-    this.server.emit('newFraudAlert', alert);
+    this.server.emit('new_fraud_alert', alert);
   }
 }

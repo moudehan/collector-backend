@@ -66,9 +66,12 @@ export class FraudService {
       diff_percent: Math.round(diff * 100),
     });
 
+    const article = await this.articleRepo.findOne({
+      where: { id: articleId },
+    });
     this.fraudGateway.emitNewAlert({
       id: alert.id,
-      article: { id: articleId, title: history[0].article?.title },
+      article: { id: articleId, title: article?.title ?? articleId },
       severity,
       reason,
       average_price: median,
@@ -78,5 +81,48 @@ export class FraudService {
     });
 
     return alert;
+  }
+
+  async getAlerts() {
+    return this.alertRepo.find({
+      relations: ['article'],
+      order: { created_at: 'DESC' },
+    });
+  }
+
+  async markAsRead(id: string) {
+    await this.alertRepo.update(id, { is_read: true });
+    return { success: true };
+  }
+
+  async markAllRead() {
+    const result = await this.alertRepo
+      .createQueryBuilder()
+      .update()
+      .set({ is_read: true })
+      .execute();
+
+    return {
+      success: true,
+      message: 'Toutes les notifications ont été marquées comme lues.',
+      affected: result.affected ?? 0,
+    };
+  }
+
+  async markAllUnread() {
+    const result = await this.alertRepo
+      .createQueryBuilder()
+      .update()
+      .set({ is_read: false })
+      .execute();
+
+    return {
+      success: true,
+      message: 'Toutes les notifications ont été marquées comme non lues.',
+      affected: result.affected ?? 0,
+    };
+  }
+  async deleteAlertsByArticleId(articleId: string): Promise<void> {
+    await this.alertRepo.delete({ article: { id: articleId } });
   }
 }

@@ -1,26 +1,33 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
-import { FraudAlert } from 'src/fraud/fraud-alert.entity';
 import { UserRole } from 'src/users/user.entity';
-import { Repository } from 'typeorm';
+import { FraudService } from './fraud.service';
 
 @Controller('fraud')
 export class FraudController {
-  constructor(
-    @InjectRepository(FraudAlert)
-    private alertRepo: Repository<FraudAlert>,
-  ) {}
+  constructor(private fraudService: FraudService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Get('alerts')
-  async getAlerts() {
-    return this.alertRepo.find({
-      relations: ['article'],
-      order: { created_at: 'DESC' },
-    });
+  getAlerts() {
+    return this.fraudService.getAlerts();
+  }
+
+  @Patch('read/:id')
+  markAsRead(@Param('id') id: string) {
+    return this.fraudService.markAsRead(id);
+  }
+
+  @Patch('read-all')
+  markAllAsRead() {
+    return this.fraudService.markAllRead();
+  }
+
+  @Patch('unread-all')
+  markAllUnread() {
+    return this.fraudService.markAllUnread();
   }
 }
