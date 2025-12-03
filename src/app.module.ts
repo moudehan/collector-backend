@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AppGateway } from 'src/app.getway';
 import { CategoriesModule } from 'src/categories/categories.module';
 import { AdminModule } from './admin/admin.module';
 import { Article } from './articles/article.entity';
@@ -42,6 +43,6 @@ import { UsersModule } from './users/users.module';
     CategoriesModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [AppGateway],
 })
 export class AppModule {}
