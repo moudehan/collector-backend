@@ -28,6 +28,17 @@ export class ArticlesController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get(':id')
+  getOne(@Param('id') id: string) {
+    return this.service.findOneById(id);
+  }
+
+  @Delete(':id')
+  async deleteArticle(@Param('id') id: string) {
+    return this.service.delete(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('mine')
   myArticles(@CurrentUser() user: JwtUser) {
     return this.service.findMine(user.sub);

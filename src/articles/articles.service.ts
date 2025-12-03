@@ -73,6 +73,36 @@ export class ArticlesService {
     });
   }
 
+  async findOneById(id: string): Promise<Article | null> {
+    return this.repo
+      .createQueryBuilder('article')
+
+      .leftJoinAndSelect('article.shop', 'shop')
+      .leftJoin('shop.owner', 'owner')
+      .leftJoin('article.seller', 'seller')
+      .leftJoinAndSelect('article.category', 'category')
+      .leftJoinAndSelect('article.likes', 'likes')
+      .leftJoin('likes.user', 'likeUser')
+      .leftJoinAndSelect('article.fraud_alerts', 'fraud_alerts')
+      .leftJoinAndSelect('article.price_history', 'price_history')
+      .addSelect(['seller.id', 'seller.email', 'seller.created_at'])
+      .addSelect(['owner.id', 'owner.email', 'owner.created_at'])
+      .addSelect(['likeUser.id', 'likeUser.email', 'likeUser.created_at'])
+      .where('article.id = :id', { id })
+      .orderBy('fraud_alerts.created_at', 'DESC')
+      .getOne();
+  }
+
+  async delete(id: string) {
+    const result = await this.repo.delete(id);
+
+    if (result.affected === 0) {
+      throw new NotFoundException('Article non trouvé');
+    }
+
+    return { success: true };
+  }
+
   async approve(id: string) {
     const article = await this.repo.findOne({ where: { id } });
 
