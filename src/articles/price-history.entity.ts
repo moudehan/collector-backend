@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Article } from './article.entity';
 
 @Entity('price_history')
@@ -6,7 +6,9 @@ export class PriceHistory {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Article, (article) => article.id)
+  @ManyToOne(() => Article, (article) => article.price_history, {
+    onDelete: 'CASCADE',
+  })
   article: Article;
 
   @Column('decimal')

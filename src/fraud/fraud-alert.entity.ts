@@ -1,35 +1,46 @@
 import { Article } from 'src/articles/article.entity';
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 export enum FraudSeverity {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
 }
 
-@Entity('fraud_alerts')
+@Entity()
 export class FraudAlert {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn()
+  id: number;
 
-  @ManyToOne(() => Article)
+  @ManyToOne(() => Article, (article) => article.fraud_alerts, {
+    onDelete: 'CASCADE',
+  })
   article: Article;
-
-  @Column()
-  reason: string;
 
   @Column({ type: 'enum', enum: FraudSeverity })
   severity: FraudSeverity;
 
-  @Column({ type: 'float', nullable: true })
+  @Column()
+  reason: string;
+
+  @Column('float')
   average_price: number;
 
-  @Column({ type: 'float', nullable: true })
+  @Column('float')
   last_price_recorded: number;
 
-  @Column({ type: 'float', nullable: true })
+  @Column('int')
   diff_percent: number;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({ default: false })
+  is_read: boolean;
+
+  @CreateDateColumn()
   created_at: Date;
 }

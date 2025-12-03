@@ -1,4 +1,6 @@
+import { PriceHistory } from 'src/articles/price-history.entity';
 import { Category } from 'src/categories/category.entity';
+import { FraudAlert } from 'src/fraud/fraud-alert.entity';
 import { Shop } from 'src/shops/shop.entity';
 import { User } from 'src/users/user.entity';
 import {
@@ -58,6 +60,12 @@ export class Article {
 
   @Column({ default: 0 })
   likesCount: number;
+
+  @OneToMany(() => FraudAlert, (alert) => alert.article)
+  fraud_alerts: FraudAlert[];
+
+  @OneToMany(() => PriceHistory, (ph) => ph.article)
+  price_history: PriceHistory[];
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
