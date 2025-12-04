@@ -34,10 +34,21 @@ export class ShopsService {
     return this.shopRepo.save(shop);
   }
 
-  getShopsByUser(userId: string) {
-    return this.shopRepo.find({
-      where: { owner: { id: userId } },
-    });
+  async getShopsByUser(userId: string) {
+    return this.shopRepo
+      .createQueryBuilder('shop')
+      .leftJoin('shop.owner', 'owner')
+      .select([
+        'shop.id',
+        'shop.name',
+        'shop.description',
+        'shop.created_at',
+        'owner.id',
+        'owner.firstname',
+        'owner.lastname',
+      ])
+      .where('owner.id = :userId', { userId })
+      .getMany();
   }
 
   async getAllShopsWithArticles() {
