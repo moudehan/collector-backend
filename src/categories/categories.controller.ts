@@ -10,13 +10,14 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
+import { RolesGuard } from 'src/auth/roles.guard';
 import { CategoriesService } from 'src/categories/categories.service';
 import { CreateCategoryDto } from 'src/categories/dto/create-category.dto';
 import { UpdateCategoryDto } from 'src/categories/dto/update-category.dto';
 import { UserRole } from 'src/users/user.entity';
 
 @Controller('admin/categories')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class CategoriesController {
   constructor(private readonly service: CategoriesService) {}
 
