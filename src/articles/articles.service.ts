@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { File as MulterFile } from 'multer';
 import { CreateArticleDto } from 'src/articles/dto/create-article.dto';
 import { Category } from 'src/categories/category.entity';
 import { FraudService } from 'src/fraud/fraud.service';
@@ -14,6 +15,7 @@ import {
 import { Shop } from 'src/shops/shop.entity';
 import { User } from 'src/users/user.entity';
 import { Repository } from 'typeorm';
+import { ArticleImage } from './article-image.entity';
 import { ArticleLike } from './article-like.entity';
 import { Article, ArticleStatus } from './article.entity';
 import { PriceHistory } from './price-history.entity';
@@ -26,15 +28,34 @@ export class ArticlesService {
     @InjectRepository(ArticleLike) private likeRepo: Repository<ArticleLike>,
     @InjectRepository(Notification) private notifRepo: Repository<Notification>,
     private fraudService: FraudService,
+    @InjectRepository(ArticleImage)
+    private imgRepo: Repository<ArticleImage>,
   ) {}
 
-  async create(dto: CreateArticleDto, userId: string) {
+  async create(dto: CreateArticleDto, images: MulterFile[], userId: string) {
     if (!dto.categoryId) {
       throw new BadRequestException({ message: 'categoryId est requis' });
     }
 
     if (!dto.shopId) {
       throw new BadRequestException({ message: 'shopId est requis' });
+    }
+
+    const shop = await this.repo.manager.getRepository(Shop).findOne({
+      where: { id: dto.shopId },
+      relations: ['owner'],
+    });
+
+    if (!shop) {
+      throw new NotFoundException('Boutique introuvable');
+    }
+
+    if (shop.owner.id !== userId) {
+      throw new BadRequestException({
+        success: false,
+        message:
+          "Vous n'êtes pas autorisé à créer un article dans cette boutique.",
+      });
     }
 
     const existing = await this.repo.findOne({
@@ -64,7 +85,22 @@ export class ArticlesService {
       category: { id: dto.categoryId } as Category,
     });
 
-    return this.repo.save(article);
+    const savedArticle = await this.repo.save(article);
+
+    if (images && images.length > 0) {
+      const imageEntities = images.map((file) => ({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        url: `/uploads/articles/${file.filename}`,
+        article: savedArticle,
+      }));
+
+      await this.imgRepo.save(imageEntities);
+    }
+
+    return this.repo.findOne({
+      where: { id: savedArticle.id },
+      relations: ['images'],
+    });
   }
   findMine(userId: string) {
     return this.repo.find({
@@ -85,6 +121,7 @@ export class ArticlesService {
       .leftJoin('likes.user', 'likeUser')
       .leftJoinAndSelect('article.fraud_alerts', 'fraud_alerts')
       .leftJoinAndSelect('article.price_history', 'price_history')
+      .leftJoinAndSelect('article.images', 'images')
       .addSelect(['seller.id', 'seller.email', 'seller.created_at'])
       .addSelect(['owner.id', 'owner.email', 'owner.created_at'])
       .addSelect(['likeUser.id', 'likeUser.email', 'likeUser.created_at'])
@@ -296,7 +333,7 @@ export class ArticlesService {
       .leftJoinAndSelect('article.shop', 'shop')
       .leftJoinAndSelect('article.seller', 'seller')
       .where('category.id IN (:...cats)', { cats: preferredCategories })
-      .andWhere('article.status = :status', { status: ArticleStatus.APPROVED }) // 🔥 seulement approuvés
+      .andWhere('article.status = :status', { status: ArticleStatus.APPROVED })
       .getMany();
 
     console.log('RAW RECOMMENDATIONS =', recommendations);
