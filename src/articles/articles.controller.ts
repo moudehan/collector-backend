@@ -6,8 +6,9 @@ import {
   Param,
   Patch,
   Post,
-  UseGuards,
+  Query,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
@@ -21,8 +22,8 @@ import { ArticlesService } from './articles.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
 import type { File as MulterFile } from 'multer';
+import { diskStorage } from 'multer';
 import { extname } from 'path';
 
 @Controller('articles')
@@ -88,8 +89,8 @@ export class ArticlesController {
   }
 
   @Get()
-  publicCatalogue() {
-    return this.service.publicCatalogue();
+  publicCatalogue(@Query('categoryId') categoryId?: string) {
+    return this.service.publicCatalogue(categoryId);
   }
 
   @UseGuards(JwtAuthGuard)

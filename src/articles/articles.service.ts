@@ -170,11 +170,19 @@ export class ArticlesService {
     return this.repo.update(id, { status: ArticleStatus.REJECTED });
   }
 
-  publicCatalogue() {
-    return this.repo.find({
-      where: { status: ArticleStatus.APPROVED },
-      relations: ['shop', 'seller'],
-    });
+  publicCatalogue(categoryId?: string) {
+    const query = this.repo
+      .createQueryBuilder('article')
+      .leftJoinAndSelect('article.shop', 'shop')
+      .leftJoinAndSelect('article.seller', 'seller')
+      .leftJoinAndSelect('article.images', 'images')
+      .where('article.status = :status', { status: ArticleStatus.APPROVED });
+
+    if (categoryId) {
+      query.andWhere('article.categoryId = :categoryId', { categoryId });
+    }
+
+    return query.orderBy('article.created_at', 'DESC').getMany();
   }
 
   async follow(articleId: string, userId: string) {
