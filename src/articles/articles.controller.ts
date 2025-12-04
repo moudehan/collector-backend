@@ -7,6 +7,8 @@ import {
   Patch,
   Post,
   UseGuards,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
@@ -14,8 +16,14 @@ import { RolesGuard } from 'src/auth/roles.guard';
 import { CurrentUser } from 'src/auth/user.decorator';
 import type { JwtUser } from 'src/auth/user.type';
 import { UserRole } from 'src/users/user.entity';
+
 import { ArticlesService } from './articles.service';
 import { CreateArticleDto } from './dto/create-article.dto';
+
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import type { File as MulterFile } from 'multer';
+import { extname } from 'path';
 
 @Controller('articles')
 export class ArticlesController {
@@ -23,8 +31,29 @@ export class ArticlesController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Body() dto: CreateArticleDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.sub);
+  @UseInterceptors(
+    FilesInterceptor('images', 10, {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+      storage: diskStorage({
+        destination: './uploads/articles',
+        filename: (
+          req,
+          file: MulterFile,
+          cb: (error: Error | null, filename: string) => void,
+        ) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+          cb(null, `${unique}${extname(file.originalname)}`);
+        },
+      }),
+    }),
+  )
+  create(
+    @Body() dto: CreateArticleDto,
+    @UploadedFiles() images: MulterFile[],
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.service.create(dto, images, user.sub);
   }
 
   @UseGuards(JwtAuthGuard)

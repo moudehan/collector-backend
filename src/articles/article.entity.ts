@@ -10,6 +10,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { ArticleImage } from './article-image.entity';
 import { ArticleLike } from './article-like.entity';
 
 export enum ArticleStatus {
@@ -66,6 +67,9 @@ export class Article {
 
   @OneToMany(() => PriceHistory, (ph) => ph.article)
   price_history: PriceHistory[];
+
+  @OneToMany(() => ArticleImage, (img) => img.article, { cascade: true })
+  images: ArticleImage[];
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;

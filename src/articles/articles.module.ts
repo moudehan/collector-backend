@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FraudModule } from 'src/fraud/fraud.module';
 import { Notification } from 'src/notifications/notification.entity';
+import { ArticleImage } from './article-image.entity';
 import { ArticleLike } from './article-like.entity';
 import { Article } from './article.entity';
 import { ArticlesController } from './articles.controller';
@@ -15,6 +16,7 @@ import { PriceHistory } from './price-history.entity';
       PriceHistory,
       ArticleLike,
       Notification,
+      ArticleImage,
     ]),
     FraudModule,
   ],
