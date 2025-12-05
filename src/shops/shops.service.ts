@@ -61,4 +61,49 @@ export class ShopsService {
       },
     });
   }
+
+  async getShopById(shopId: string) {
+    const shop = await this.shopRepo
+      .createQueryBuilder('shop')
+      .leftJoin('shop.owner', 'owner')
+      .leftJoin('shop.articles', 'article')
+      .leftJoin('article.category', 'category')
+      .leftJoin('article.seller', 'seller')
+      .leftJoin('article.images', 'image')
+      .where('shop.id = :shopId', { shopId })
+      .orderBy('article.created_at', 'DESC')
+      .select([
+        'shop.id',
+        'shop.name',
+        'shop.description',
+        'shop.created_at',
+
+        'owner.id',
+        'owner.firstname',
+        'owner.lastname',
+
+        'article.id',
+        'article.title',
+        'article.description',
+        'article.price',
+        'article.created_at',
+
+        'category.id',
+        'category.name',
+
+        'seller.id',
+        'seller.firstname',
+        'seller.lastname',
+
+        'image.id',
+        'image.url',
+      ])
+      .getOne();
+
+    if (!shop) {
+      throw new BadRequestException('Boutique introuvable');
+    }
+
+    return shop;
+  }
 }

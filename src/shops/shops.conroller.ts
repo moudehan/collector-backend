@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
@@ -29,5 +29,11 @@ export class ShopsController {
   @Get('admin/all')
   getAllShopsWithArticles() {
     return this.shopsService.getAllShopsWithArticles();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id')
+  async getShopById(@Param('id') id: string) {
+    return this.shopsService.getShopById(id);
   }
 }
