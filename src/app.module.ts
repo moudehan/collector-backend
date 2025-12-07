@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { join } from 'path';
 import { AppGateway } from 'src/app.getway';
 import { CategoriesModule } from 'src/categories/categories.module';
+import { Notification } from 'src/notifications/notification.entity';
 import { AdminModule } from './admin/admin.module';
 import { Article } from './articles/article.entity';
 import { ArticlesModule } from './articles/articles.module';
@@ -38,6 +39,7 @@ import { UsersModule } from './users/users.module';
       entities: [User, Shop, Article],
       synchronize: true,
     }),
+    Notification,
     UsersModule,
     AuthModule,
     ShopsModule,

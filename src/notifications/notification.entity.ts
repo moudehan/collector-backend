@@ -1,32 +1,37 @@
+import { User } from 'src/users/user.entity';
 import {
-  Entity,
-  PrimaryGeneratedColumn,
-  ManyToOne,
   Column,
   CreateDateColumn,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
-import { User } from 'src/users/user.entity';
 
 export enum NotificationType {
-  PRICE_UPDATE = 'price_update',
-  FRAUD_ALERT = 'fraud_alert',
-  MESSAGE_RECEIVED = 'message_received',
-  SYSTEM = 'system',
+  NEW_ARTICLE = 'NEW_ARTICLE',
+  PRICE_UPDATE = 'PRICE_UPDATE',
+  SYSTEM = 'SYSTEM',
 }
 
 @Entity()
 export class Notification {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn()
+  id: number;
 
-  @ManyToOne(() => User, (user) => user.notifications, { eager: true })
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
   user: User;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  created_by: User;
 
   @Column({ type: 'enum', enum: NotificationType })
   type: NotificationType;
 
-  @Column({ type: 'json', nullable: true })
-  payload: any;
+  @Column({ type: 'jsonb', default: {} })
+  payload: Record<string, unknown>;
+
+  @Column({ default: false })
+  is_read: boolean;
 
   @CreateDateColumn()
   created_at: Date;
