@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import { IsNotEmpty, IsNumber, IsString, IsUUID } from 'class-validator';
 
 export class CreateArticleDto {
+  [x: string]: any;
   @IsString()
   @IsNotEmpty({ message: 'Le titre est obligatoire' })
   title: string;

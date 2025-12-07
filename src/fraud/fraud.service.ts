@@ -22,15 +22,23 @@ export class FraudService {
   ) {}
 
   async checkPriceAnomaly(articleId: string, newPrice: number) {
+    const article = await this.articleRepo.findOne({
+      where: { id: articleId },
+    });
+
+    if (!article) return;
+
     const history = await this.historyRepo.find({
       where: { article: { id: articleId } },
       order: { changed_at: 'ASC' },
     });
 
-    if (history.length < 3) return;
+    const basePrices =
+      history.length > 0
+        ? history.map((h) => Number(h.new_price))
+        : [Number(article.price)];
 
-    const prices = history.map((h) => Number(h.new_price));
-    const sorted = [...prices].sort((a, b) => a - b);
+    const sorted = [...basePrices].sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
 
     const median =
@@ -38,23 +46,26 @@ export class FraudService {
         ? sorted[mid]
         : (sorted[mid - 1] + sorted[mid]) / 2;
 
-    const diff = Math.abs(newPrice - median) / median;
+    const upperLimit = median * 1.1; // +10%
+    const lowerLimit = median * 0.5; // -50%
 
-    if (diff <= 0.1) return;
+    if (newPrice >= lowerLimit && newPrice <= upperLimit) return;
+
+    const diffPercent = Math.abs((newPrice - median) / median) * 100;
 
     let severity: FraudSeverity;
     let reason: string;
 
-    if (diff > 0.3) {
-      severity = FraudSeverity.HIGH;
-      reason = `Prix potentiellement frauduleux (~${Math.round(
-        diff * 100,
-      )}% d'écart par rapport au marché)`;
+    if (newPrice > upperLimit) {
+      severity = diffPercent > 30 ? FraudSeverity.HIGH : FraudSeverity.MEDIUM;
+      reason = `Augmentation anormale de +${Math.round(
+        diffPercent,
+      )}% par rapport au prix médian (${median}€)`;
     } else {
-      severity = FraudSeverity.MEDIUM;
-      reason = `Prix atypique (~${Math.round(
-        diff * 100,
-      )}% d'écart par rapport au marché)`;
+      severity = diffPercent > 50 ? FraudSeverity.HIGH : FraudSeverity.MEDIUM;
+      reason = `Baisse anormale de -${Math.round(
+        diffPercent,
+      )}% par rapport au prix médian (${median}€)`;
     }
 
     const alert = await this.alertRepo.save({
@@ -63,20 +74,17 @@ export class FraudService {
       reason,
       average_price: median,
       last_price_recorded: newPrice,
-      diff_percent: Math.round(diff * 100),
+      diff_percent: Math.round(diffPercent),
     });
 
-    const article = await this.articleRepo.findOne({
-      where: { id: articleId },
-    });
     this.fraudGateway.emitNewAlert({
       id: alert.id,
-      article: { id: articleId, title: article?.title ?? articleId },
+      article: { id: articleId, title: article.title },
       severity,
       reason,
       average_price: median,
       last_price_recorded: newPrice,
-      diff_percent: Math.round(diff * 100),
+      diff_percent: Math.round(diffPercent),
       created_at: alert.created_at,
     });
 
