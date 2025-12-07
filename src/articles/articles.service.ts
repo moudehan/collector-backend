@@ -103,26 +103,42 @@ export class ArticlesService {
       await this.imgRepo.save(imageEntities);
     }
 
-    this.articleGateway.emitNewArticleInterest({
-      articleId: savedArticle.id,
-      title: savedArticle.title,
-      price: savedArticle.price,
-      categoryId: dto.categoryId,
-      created_at: savedArticle.created_at,
-    });
+    const interestedUsers = await this.likeRepo
+      .createQueryBuilder('like')
+      .leftJoin('like.article', 'article')
+      .leftJoin('like.user', 'user')
+      .where('article.categoryId = :categoryId', {
+        categoryId: dto.categoryId,
+      })
+      .select('user.id', 'userId')
+      .addSelect('COUNT(like.id)', 'total')
+      .groupBy('user.id')
+      .having('COUNT(like.id) >= 2')
+      .getRawMany<{ userId: string; total: number }>();
 
-    const usersToNotify = await this.repo.manager.getRepository(User).find();
+    const userIdsToNotify = interestedUsers
+      .map((u) => u.userId)
+      .filter((id) => id !== userId);
 
-    for (const user of usersToNotify) {
-      if (user.id === userId) continue;
+    if (userIdsToNotify.length > 0) {
+      this.articleGateway.emitNewArticleInterest({
+        articleId: savedArticle.id,
+        title: savedArticle.title,
+        price: savedArticle.price,
+        categoryId: dto.categoryId,
+        created_at: savedArticle.created_at,
+      });
+    }
 
+    for (const targetUserId of userIdsToNotify) {
       await this.notificationsService.send(
-        user.id,
+        targetUserId,
         NotificationType.NEW_ARTICLE,
         {
           article_id: savedArticle.id,
           title: savedArticle.title,
-          message: 'Un nouvel article vient d’être publié',
+          categoryId: dto.categoryId,
+          message: 'Un nouvel article correspond à vos centres d’intérêt',
         },
         userId,
       );
@@ -133,6 +149,7 @@ export class ArticlesService {
       relations: ['images'],
     });
   }
+
   findMine(userId: string) {
     return this.repo.find({
       where: { seller: { id: userId } },
