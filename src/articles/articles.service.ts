@@ -1,17 +1,21 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { File as MulterFile } from 'multer';
+import { ArticleGateway } from 'src/articles/article.gateway';
 import { CreateArticleDto } from 'src/articles/dto/create-article.dto';
+import { UpdateArticleDto } from 'src/articles/dto/update-article.dto';
 import { Category } from 'src/categories/category.entity';
 import { FraudService } from 'src/fraud/fraud.service';
 import {
   Notification,
   NotificationType,
 } from 'src/notifications/notification.entity';
+import { NotificationsService } from 'src/notifications/notifications.service';
 import { Shop } from 'src/shops/shop.entity';
 import { User } from 'src/users/user.entity';
 import { Repository } from 'typeorm';
@@ -30,6 +34,8 @@ export class ArticlesService {
     private fraudService: FraudService,
     @InjectRepository(ArticleImage)
     private imgRepo: Repository<ArticleImage>,
+    private readonly articleGateway: ArticleGateway,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreateArticleDto, images: MulterFile[], userId: string) {
@@ -97,6 +103,31 @@ export class ArticlesService {
       await this.imgRepo.save(imageEntities);
     }
 
+    this.articleGateway.emitNewArticleInterest({
+      articleId: savedArticle.id,
+      title: savedArticle.title,
+      price: savedArticle.price,
+      categoryId: dto.categoryId,
+      created_at: savedArticle.created_at,
+    });
+
+    const usersToNotify = await this.repo.manager.getRepository(User).find();
+
+    for (const user of usersToNotify) {
+      if (user.id === userId) continue;
+
+      await this.notificationsService.send(
+        user.id,
+        NotificationType.NEW_ARTICLE,
+        {
+          article_id: savedArticle.id,
+          title: savedArticle.title,
+          message: 'Un nouvel article vient d’être publié',
+        },
+        userId,
+      );
+    }
+
     return this.repo.findOne({
       where: { id: savedArticle.id },
       relations: ['images'],
@@ -109,10 +140,9 @@ export class ArticlesService {
     });
   }
 
-  async findOneById(id: string): Promise<Article | null> {
-    return this.repo
+  async findOneById(id: string, userId?: string): Promise<Article | null> {
+    const article = await this.repo
       .createQueryBuilder('article')
-
       .leftJoinAndSelect('article.shop', 'shop')
       .leftJoin('shop.owner', 'owner')
       .leftJoin('article.seller', 'seller')
@@ -128,6 +158,18 @@ export class ArticlesService {
       .where('article.id = :id', { id })
       .orderBy('fraud_alerts.created_at', 'DESC')
       .getOne();
+
+    if (!article) return null;
+
+    if (userId && article.likes) {
+      article.isFavorite = article.likes.some(
+        (like) => like.user && like.user.id === userId,
+      );
+    } else {
+      article.isFavorite = false;
+    }
+
+    return article;
   }
 
   async delete(id: string) {
@@ -183,6 +225,40 @@ export class ArticlesService {
     }
 
     return query.orderBy('article.created_at', 'DESC').getMany();
+  }
+
+  async privateCatalogue(categoryId?: string, userId?: string) {
+    const query = this.repo
+      .createQueryBuilder('article')
+      .leftJoinAndSelect('article.shop', 'shop')
+      .leftJoinAndSelect('article.seller', 'seller')
+      .leftJoinAndSelect('article.images', 'images')
+      .leftJoinAndSelect('article.likes', 'likes')
+      .leftJoin('likes.user', 'likeUser')
+      .where('article.status = :status', { status: ArticleStatus.APPROVED });
+
+    if (userId) {
+      query.andWhere('seller.id != :userId', { userId });
+
+      query.addSelect(['likeUser.id']);
+    }
+
+    if (categoryId) {
+      query.andWhere('article.categoryId = :categoryId', { categoryId });
+    }
+
+    const articles = await query
+      .orderBy('article.created_at', 'DESC')
+      .getMany();
+
+    for (const a of articles) {
+      a.isFavorite =
+        !!userId &&
+        Array.isArray(a.likes) &&
+        a.likes.some((like) => like?.user?.id === userId);
+    }
+
+    return articles;
   }
 
   async follow(articleId: string, userId: string) {
@@ -255,6 +331,7 @@ export class ArticlesService {
         'article.category',
         'article.seller',
         'article.shop',
+        'article.images',
       ],
     });
 
@@ -264,6 +341,7 @@ export class ArticlesService {
     for (const like of likes) {
       if (!seen.has(like.article.id)) {
         seen.add(like.article.id);
+        like.article.isFavorite = true;
         articles.push(like.article);
       }
     }
@@ -304,6 +382,86 @@ export class ArticlesService {
       message:
         'Prix mis à jour, notifications envoyées & vérification fraude effectuée',
     };
+  }
+
+  async updateArticle(
+    articleId: string,
+    dto: UpdateArticleDto,
+    newImages: MulterFile[],
+    userId: string,
+  ) {
+    const article = await this.repo.findOne({
+      where: { id: articleId },
+      relations: ['images', 'seller'],
+    });
+
+    if (!article) throw new NotFoundException('Article introuvable');
+    if (article.seller.id !== userId)
+      throw new ForbiddenException('Non autorisé');
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const keptImages: { id: string }[] = dto.oldImages
+      ? JSON.parse(dto.oldImages)
+      : [];
+
+    const keptIds = keptImages.map((img) => img.id);
+
+    const imagesToDelete = article.images.filter(
+      (img) => !keptIds.includes(img.id),
+    );
+
+    if (imagesToDelete.length > 0) {
+      console.log(
+        '🗑 DELETE =',
+        imagesToDelete.map((i) => i.id),
+      );
+      await this.imgRepo.delete(imagesToDelete.map((img) => img.id));
+    }
+
+    if (newImages && newImages.length > 0) {
+      const imageEntities = newImages.map((file) =>
+        this.imgRepo.create({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+          url: `/uploads/articles/${file.filename}`,
+          article: article,
+        }),
+      );
+
+      await this.imgRepo.save(imageEntities);
+    }
+
+    if (
+      dto.price !== undefined &&
+      Number(dto.price) !== Number(article.price)
+    ) {
+      await this.fraudService.checkPriceAnomaly(article.id, Number(dto.price));
+
+      await this.priceRepo.save({
+        article: { id: article.id },
+        old_price: article.price,
+        new_price: Number(dto.price),
+      });
+
+      article.price = Number(dto.price);
+    }
+
+    if (dto.title !== undefined) article.title = dto.title;
+    if (dto.description !== undefined) article.description = dto.description;
+    if (dto.shipping_cost !== undefined)
+      article.shipping_cost = Number(dto.shipping_cost);
+
+    if (dto.categoryId) {
+      article.category = { id: dto.categoryId } as Category;
+    }
+
+    await this.repo.save(article);
+
+    const updated = await this.repo.findOne({
+      where: { id: article.id },
+      relations: ['images', 'category', 'shop'],
+    });
+
+    return updated;
   }
 
   async getRecommendations(userId: string, userRole: string) {
@@ -359,6 +517,9 @@ export class ArticlesService {
 
     finalList.sort((a, b) => (b.likesCount ?? 0) - (a.likesCount ?? 0));
 
+    for (const a of finalList) {
+      a.isFavorite = false;
+    }
     return finalList;
   }
 }

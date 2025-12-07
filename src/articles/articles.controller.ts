@@ -25,10 +25,16 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import type { File as MulterFile } from 'multer';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { UpdateArticleDto } from 'src/articles/dto/update-article.dto';
 
 @Controller('articles')
 export class ArticlesController {
   constructor(private service: ArticlesService) {}
+
+  @Get('public')
+  publicCatalogue(@Query('categoryId') categoryId?: string) {
+    return this.service.publicCatalogue(categoryId);
+  }
 
   @UseGuards(JwtAuthGuard)
   @Post()
@@ -58,9 +64,21 @@ export class ArticlesController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('recommendations')
+  getRecommendations(@CurrentUser() user: JwtUser) {
+    return this.service.getRecommendations(user.sub, user.role);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('following')
+  getFollowing(@CurrentUser() user: JwtUser) {
+    return this.service.getFollowing(user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  getOne(@Param('id') id: string) {
-    return this.service.findOneById(id);
+  getOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.findOneById(id, user.sub);
   }
 
   @Delete(':id')
@@ -88,9 +106,13 @@ export class ArticlesController {
     return this.service.reject(id);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
-  publicCatalogue(@Query('categoryId') categoryId?: string) {
-    return this.service.publicCatalogue(categoryId);
+  privateCatalogue(
+    @CurrentUser() user: JwtUser,
+    @Query('categoryId') categoryId?: string,
+  ) {
+    return this.service.privateCatalogue(categoryId, user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -112,15 +134,31 @@ export class ArticlesController {
     return this.service.updatePrice(id, Number(newPrice));
   }
 
-  @Get('recommendations')
   @UseGuards(JwtAuthGuard)
-  getRecommendations(@CurrentUser() user: JwtUser) {
-    return this.service.getRecommendations(user.userId, user.role);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('following')
-  getFollowing(@CurrentUser() user: JwtUser) {
-    return this.service.getFollowing(user.userId);
+  @Patch(':id')
+  @UseInterceptors(
+    FilesInterceptor('newImages', 10, {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+      storage: diskStorage({
+        destination: './uploads/articles',
+        filename: (
+          req,
+          file,
+          cb: (error: Error | null, filename: string) => void,
+        ) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+          cb(null, `${unique}${extname(file.originalname)}`);
+        },
+      }),
+    }),
+  )
+  async updateArticle(
+    @Param('id') id: string,
+    @UploadedFiles() files: MulterFile[],
+    @Body() dto: UpdateArticleDto,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.service.updateArticle(id, dto, files, user.sub);
   }
 }

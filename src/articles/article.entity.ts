@@ -62,6 +62,8 @@ export class Article {
   @Column({ default: 0 })
   likesCount: number;
 
+  isFavorite?: boolean;
+
   @OneToMany(() => FraudAlert, (alert) => alert.article)
   fraud_alerts: FraudAlert[];
 
