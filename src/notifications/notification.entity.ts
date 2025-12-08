@@ -11,6 +11,7 @@ export enum NotificationType {
   NEW_ARTICLE = 'NEW_ARTICLE',
   PRICE_UPDATE = 'PRICE_UPDATE',
   SYSTEM = 'SYSTEM',
+  ARTICLE_UPDATED = 'ARTICLE_UPDATED',
 }
 
 @Entity()

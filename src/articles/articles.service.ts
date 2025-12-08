@@ -479,6 +479,37 @@ export class ArticlesService {
       relations: ['images', 'category', 'shop'],
     });
 
+    const followers = await this.likeRepo.find({
+      where: { article: { id: article.id } },
+      relations: ['user'],
+    });
+
+    for (const f of followers) {
+      if (f.user.id === userId) continue;
+
+      const savedNotif = await this.notificationsService.send(
+        f.user.id,
+        NotificationType.ARTICLE_UPDATED,
+        {
+          article_id: article.id,
+          title: article.title,
+          message: 'Un article que vous suivez a été modifié',
+        },
+        userId,
+      );
+
+      if (savedNotif) {
+        this.articleGateway.emitNewArticleInterest({
+          id: savedNotif.id,
+          type: NotificationType.ARTICLE_UPDATED,
+          title: article.title,
+          message: savedNotif.payload?.message,
+          article_id: article.id,
+          created_at: savedNotif.created_at,
+        });
+      }
+    }
+
     return updated;
   }
 
