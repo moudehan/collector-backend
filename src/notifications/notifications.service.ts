@@ -28,17 +28,19 @@ export class NotificationsService {
     createdBy?: string,
   ) {
     const notif = this.repo.create({
-      user: { id: userId },
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      user: { id: userId } as any,
       type,
       payload,
-      created_by: createdBy ? { id: createdBy } : undefined,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      created_by: createdBy ? ({ id: createdBy } as any) : undefined,
+      is_read: false,
     });
 
-    await this.repo.save(notif);
+    const saved = await this.repo.save(notif);
+    this.gateway.sendToUser(userId, saved);
 
-    this.gateway.sendToUser(userId, notif);
-
-    return notif;
+    return saved;
   }
 
   async markAsRead(id: string) {

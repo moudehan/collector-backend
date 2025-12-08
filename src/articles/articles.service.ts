@@ -120,18 +120,8 @@ export class ArticlesService {
       .map((u) => u.userId)
       .filter((id) => id !== userId);
 
-    if (userIdsToNotify.length > 0) {
-      this.articleGateway.emitNewArticleInterest({
-        articleId: savedArticle.id,
-        title: savedArticle.title,
-        price: savedArticle.price,
-        categoryId: dto.categoryId,
-        created_at: savedArticle.created_at,
-      });
-    }
-
     for (const targetUserId of userIdsToNotify) {
-      await this.notificationsService.send(
+      const savedNotif = await this.notificationsService.send(
         targetUserId,
         NotificationType.NEW_ARTICLE,
         {
@@ -142,6 +132,17 @@ export class ArticlesService {
         },
         userId,
       );
+
+      if (savedNotif) {
+        this.articleGateway.emitNewArticleInterest({
+          id: savedNotif.id,
+          type: NotificationType.NEW_ARTICLE,
+          title: savedArticle.title,
+          message: savedNotif.payload?.message,
+          article_id: savedArticle.id,
+          created_at: savedNotif.created_at,
+        });
+      }
     }
 
     return this.repo.findOne({
