@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { NotificationSettingsService } from 'src/notifications/notification-settings.service';
 import { Repository } from 'typeorm';
 import { Notification, NotificationType } from './notification.entity';
 import { NotificationsGateway } from './notifications.gateway';
@@ -10,6 +11,7 @@ export class NotificationsService {
     @InjectRepository(Notification)
     private readonly repo: Repository<Notification>,
     private readonly gateway: NotificationsGateway,
+    private readonly notificationSettingsService: NotificationSettingsService,
   ) {}
 
   getForUser(userId: string) {
@@ -27,13 +29,24 @@ export class NotificationsService {
     payload: Record<string, unknown> = {},
     createdBy?: string,
   ) {
+    const settings = await this.notificationSettingsService.getOrCreate(userId);
+
+    if (type === NotificationType.NEW_ARTICLE && !settings.NEW_ARTICLE) {
+      return null;
+    }
+
+    if (
+      type === NotificationType.ARTICLE_UPDATED &&
+      !settings.ARTICLE_UPDATED
+    ) {
+      return null;
+    }
+
     const notif = this.repo.create({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      user: { id: userId } as any,
+      user: { id: userId },
       type,
       payload,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      created_by: createdBy ? ({ id: createdBy } as any) : undefined,
+      created_by: createdBy ? { id: createdBy } : undefined,
       is_read: false,
     });
 
