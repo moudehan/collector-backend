@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { MailModule } from 'src/mail/mail.module';
 import { NotificationSettings } from 'src/notifications/notification-settings.entity';
 import { NotificationSettingsModule } from 'src/notifications/notification-settings.module';
 import { Notification } from './notification.entity';
@@ -11,6 +12,7 @@ import { NotificationsService } from './notifications.service';
   imports: [
     TypeOrmModule.forFeature([Notification, NotificationSettings]),
     NotificationSettingsModule,
+    MailModule,
   ],
   providers: [NotificationsService, NotificationsGateway],
   controllers: [NotificationsController],
