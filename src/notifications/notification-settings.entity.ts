@@ -7,13 +7,13 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-@Entity('notification_settings')
+@Entity()
 export class NotificationSettings {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @OneToOne(() => User, { nullable: false, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' })
+  @OneToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn()
   user: User;
 
   @Column({ default: true })
@@ -21,4 +21,7 @@ export class NotificationSettings {
 
   @Column({ default: true })
   ARTICLE_UPDATED: boolean;
+
+  @Column({ default: true })
+  MAIL_ENABLED: boolean;
 }

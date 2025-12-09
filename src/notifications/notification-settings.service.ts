@@ -16,6 +16,7 @@ export class NotificationSettingsService {
     return {
       NEW_ARTICLE: settings.NEW_ARTICLE,
       ARTICLE_UPDATED: settings.ARTICLE_UPDATED,
+      MAIL_ENABLED: settings.MAIL_ENABLED,
     };
   }
 
@@ -33,8 +34,8 @@ export class NotificationSettingsService {
       user: { id: userId } as User,
       NEW_ARTICLE: true,
       ARTICLE_UPDATED: true,
+      MAIL_ENABLED: true,
     });
-
     const saved = await this.settingsRepo.save(created);
     return this.mapToResponse(saved);
   }
@@ -50,6 +51,7 @@ export class NotificationSettingsService {
         user: { id: userId } as User,
         NEW_ARTICLE: true,
         ARTICLE_UPDATED: true,
+        MAIL_ENABLED: true,
       });
     }
 
@@ -59,6 +61,10 @@ export class NotificationSettingsService {
 
     if (payload.ARTICLE_UPDATED !== undefined) {
       settings.ARTICLE_UPDATED = payload.ARTICLE_UPDATED;
+    }
+
+    if (payload.MAIL_ENABLED !== undefined) {
+      settings.MAIL_ENABLED = payload.MAIL_ENABLED;
     }
 
     const saved = await this.settingsRepo.save(settings);

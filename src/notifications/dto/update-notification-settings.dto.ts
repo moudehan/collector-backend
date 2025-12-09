@@ -8,4 +8,8 @@ export class UpdateNotificationSettingsDto {
   @IsOptional()
   @IsBoolean()
   ARTICLE_UPDATED?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  MAIL_ENABLED?: boolean;
 }

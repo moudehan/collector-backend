@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MailService } from 'src/mail/mail.service';
+import { NotificationMailService } from 'src/notifications/notification-mail.service';
 import { NotificationSettingsService } from 'src/notifications/notification-settings.service';
 import { Repository } from 'typeorm';
 import { Notification, NotificationType } from './notification.entity';
@@ -13,7 +13,7 @@ export class NotificationsService {
     private readonly repo: Repository<Notification>,
     private readonly gateway: NotificationsGateway,
     private readonly notificationSettingsService: NotificationSettingsService,
-    private readonly mailService: MailService,
+    private readonly notificationMailService: NotificationMailService, // ✅ MAINTENANT IL EXISTE
   ) {}
 
   getForUser(userId: string) {
@@ -30,7 +30,7 @@ export class NotificationsService {
     type: NotificationType,
     payload: Record<string, unknown> = {},
     createdBy?: string,
-  ) {
+  ): Promise<Notification | null> {
     const settings = await this.notificationSettingsService.getOrCreate(userId);
 
     if (type === NotificationType.NEW_ARTICLE && !settings.NEW_ARTICLE) {
@@ -55,16 +55,11 @@ export class NotificationsService {
     const saved = await this.repo.save(notif);
     this.gateway.sendToUser(userId, saved);
 
-    this.mailService
-      .sendTestMail(
-        'test@collector.shop',
-        type === NotificationType.NEW_ARTICLE
-          ? 'Nouvel article'
-          : 'Article mis à jour',
-        ``,
-      )
-      .catch(() => {});
-
+    if (settings.MAIL_ENABLED === true) {
+      this.notificationMailService
+        .sendNotificationMail(userId, type, payload)
+        .catch(() => {});
+    }
     return saved;
   }
 
