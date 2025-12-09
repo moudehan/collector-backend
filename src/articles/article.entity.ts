@@ -1,3 +1,4 @@
+import { ArticleRating } from 'src/articles/article-rating.entity';
 import { PriceHistory } from 'src/articles/price-history.entity';
 import { Category } from 'src/categories/category.entity';
 import { FraudAlert } from 'src/fraud/fraud-alert.entity';
@@ -72,6 +73,15 @@ export class Article {
 
   @OneToMany(() => ArticleImage, (img) => img.article, { cascade: true })
   images: ArticleImage[];
+
+  @OneToMany(() => ArticleRating, (r) => r.article)
+  ratings: ArticleRating[];
+
+  @Column({ type: 'float', default: 0 })
+  avgRating: number;
+
+  @Column({ default: 0 })
+  ratingsCount: number;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;

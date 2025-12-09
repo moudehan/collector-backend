@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { File as MulterFile } from 'multer';
+import { ArticleRating } from 'src/articles/article-rating.entity';
 import { ArticleGateway } from 'src/articles/article.gateway';
 import { CreateArticleDto } from 'src/articles/dto/create-article.dto';
 import { UpdateArticleDto } from 'src/articles/dto/update-article.dto';
@@ -36,6 +37,8 @@ export class ArticlesService {
     private imgRepo: Repository<ArticleImage>,
     private readonly articleGateway: ArticleGateway,
     private readonly notificationsService: NotificationsService,
+    @InjectRepository(ArticleRating)
+    private readonly articleRatingRepo: Repository<ArticleRating>,
   ) {}
 
   async create(dto: CreateArticleDto, images: MulterFile[], userId: string) {
@@ -158,7 +161,10 @@ export class ArticlesService {
     });
   }
 
-  async findOneById(id: string, userId?: string): Promise<Article | null> {
+  async findOneById(
+    id: string,
+    userId?: string,
+  ): Promise<(Article & { userRating?: number | null }) | null> {
     const article = await this.repo
       .createQueryBuilder('article')
       .leftJoinAndSelect('article.shop', 'shop')
@@ -181,13 +187,29 @@ export class ArticlesService {
 
     if (userId && article.likes) {
       article.isFavorite = article.likes.some(
-        (like) => like.user && like.user.id === userId,
+        (like) => like.user?.id === userId,
       );
     } else {
       article.isFavorite = false;
     }
 
-    return article;
+    let userRating: number | null = null;
+
+    if (userId) {
+      const rating = await this.articleRatingRepo.findOne({
+        where: {
+          article: { id },
+          user: { id: userId },
+        },
+      });
+
+      userRating = rating ? rating.value : null;
+    }
+
+    return {
+      ...article,
+      userRating,
+    };
   }
 
   async delete(id: string) {

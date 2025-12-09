@@ -4,8 +4,10 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { join } from 'path';
 import { AppGateway } from 'src/app.getway';
+import { ArticleRatingsModule } from 'src/articles/article-ratings.module';
 import { CategoriesModule } from 'src/categories/categories.module';
 import { Notification } from 'src/notifications/notification.entity';
+import { ShopRatingsModule } from 'src/shops/shop-ratings.module';
 import { AdminModule } from './admin/admin.module';
 import { Article } from './articles/article.entity';
 import { ArticlesModule } from './articles/articles.module';
@@ -49,6 +51,8 @@ import { UsersModule } from './users/users.module';
     ChatModule,
     AdminModule,
     CategoriesModule,
+    ArticleRatingsModule,
+    ShopRatingsModule,
   ],
   controllers: [],
   providers: [AppGateway],
