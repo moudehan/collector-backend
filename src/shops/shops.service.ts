@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ShopRating } from 'src/shops/shop-rating.entity';
 import { Shop } from 'src/shops/shop.entity';
 import { User } from 'src/users/user.entity';
 import { Repository } from 'typeorm';
@@ -10,6 +11,8 @@ export class ShopsService {
   constructor(
     @InjectRepository(Shop)
     private readonly shopRepo: Repository<Shop>,
+    @InjectRepository(ShopRating)
+    private readonly shopRatingRepo: Repository<ShopRating>,
   ) {}
 
   async createShop(dto: CreateShopDto, userId: string) {
@@ -62,48 +65,72 @@ export class ShopsService {
     });
   }
 
-  async getShopById(shopId: string) {
+  async getShopById(shopId: string, userId?: string) {
     const shop = await this.shopRepo
       .createQueryBuilder('shop')
       .leftJoin('shop.owner', 'owner')
-      .leftJoin('shop.articles', 'article')
-      .leftJoin('article.category', 'category')
+      .leftJoinAndSelect('shop.articles', 'article')
+      .leftJoinAndSelect('article.category', 'category')
       .leftJoin('article.seller', 'seller')
-      .leftJoin('article.images', 'image')
+      .leftJoinAndSelect('article.images', 'image')
+      .leftJoinAndSelect('article.likes', 'likes')
+      .leftJoin('likes.user', 'likeUser')
+
       .where('shop.id = :shopId', { shopId })
       .orderBy('article.created_at', 'DESC')
+
       .select([
-        'shop.id',
-        'shop.name',
-        'shop.description',
-        'shop.created_at',
+        'shop',
+        'article',
+        'category',
+        'image',
+        'likes',
 
         'owner.id',
         'owner.firstname',
         'owner.lastname',
 
-        'article.id',
-        'article.title',
-        'article.description',
-        'article.price',
-        'article.created_at',
-
-        'category.id',
-        'category.name',
-
         'seller.id',
         'seller.firstname',
         'seller.lastname',
 
-        'image.id',
-        'image.url',
+        'likeUser.id',
       ])
+
       .getOne();
 
     if (!shop) {
       throw new BadRequestException('Boutique introuvable');
     }
 
-    return shop;
+    if (userId) {
+      for (const article of shop.articles) {
+        article.isFavorite =
+          Array.isArray(article.likes) &&
+          article.likes.some((like) => like.user?.id === userId);
+      }
+    } else {
+      for (const article of shop.articles) {
+        article.isFavorite = false;
+      }
+    }
+
+    let userRating: number | null = null;
+
+    if (userId) {
+      const rating = await this.shopRatingRepo.findOne({
+        where: {
+          shop: { id: shopId },
+          user: { id: userId },
+        },
+      });
+
+      userRating = rating ? rating.value : null;
+    }
+
+    return {
+      ...shop,
+      userRating,
+    };
   }
 }

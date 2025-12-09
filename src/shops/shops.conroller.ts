@@ -33,7 +33,7 @@ export class ShopsController {
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
-  async getShopById(@Param('id') id: string) {
-    return this.shopsService.getShopById(id);
+  getShopById(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.shopsService.getShopById(id, user.sub);
   }
 }

@@ -1,4 +1,5 @@
 import { Article } from 'src/articles/article.entity';
+import { ShopRating } from 'src/shops/shop-rating.entity';
 import { User } from 'src/users/user.entity';
 import {
   Column,
@@ -27,6 +28,17 @@ export class Shop {
 
   @OneToMany(() => Article, (article) => article.shop, { cascade: [] })
   articles: Article[];
+
+  @OneToMany(() => ShopRating, (r) => r.shop)
+  ratings: ShopRating[];
+
+  @Column({ type: 'float', default: 0 })
+  avgRating: number;
+
+  userRating?: number | null;
+
+  @Column({ default: 0 })
+  ratingsCount: number;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
