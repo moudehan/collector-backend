@@ -1,7 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
-import { Shop } from 'src/shops/shop.entity';
 import { Article } from 'src/articles/article.entity';
 import { Notification } from 'src/notifications/notification.entity';
+import { Shop } from 'src/shops/shop.entity';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
 export enum UserRole {
   ADMIN = 'admin',
@@ -24,6 +24,9 @@ export class User {
 
   @Column()
   lastname: string;
+
+  @Column({ unique: true })
+  userName: string;
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role: UserRole;

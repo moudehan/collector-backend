@@ -19,10 +19,10 @@ export class Shop {
 
   @Column({ nullable: true })
   description?: string;
-
   @ManyToOne(() => User, (user) => user.shops, {
     nullable: false,
     eager: true,
+    onDelete: 'CASCADE',
   })
   owner: User;
 

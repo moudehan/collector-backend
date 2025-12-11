@@ -28,7 +28,9 @@ export class Article {
   @ManyToOne(() => Shop, (shop) => shop.articles)
   shop: Shop;
 
-  @ManyToOne(() => User, (user) => user.articles)
+  @ManyToOne(() => User, (user) => user.articles, {
+    onDelete: 'CASCADE',
+  })
   seller: User;
 
   @Column()

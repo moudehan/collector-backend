@@ -28,6 +28,15 @@ export class AuthService {
     if (emailExists)
       throw new BadRequestException('Cet email est déjà utilisé');
 
+    const userName = `${data.firstName}_${data.lastName}`.toLowerCase();
+
+    const userNameExists = await this.userRepo.findOne({
+      where: { userName },
+    });
+
+    if (userNameExists)
+      throw new BadRequestException('Ce nom d’utilisateur est déjà utilisé');
+
     const hashed = await bcrypt.hash(data.password, 10);
 
     const user = this.userRepo.create({
@@ -35,7 +44,8 @@ export class AuthService {
       password_hash: hashed,
       firstname: data.firstName,
       lastname: data.lastName,
-      role: UserRole.USER,
+      userName,
+      role: UserRole.ADMIN,
     });
 
     await this.userRepo.save(user);
