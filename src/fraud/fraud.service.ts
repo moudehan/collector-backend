@@ -24,6 +24,7 @@ export class FraudService {
   async checkPriceAnomaly(articleId: string, newPrice: number) {
     const article = await this.articleRepo.findOne({
       where: { id: articleId },
+      relations: ['seller', 'shop', 'shop.owner'],
     });
 
     if (!article) return;
@@ -46,8 +47,9 @@ export class FraudService {
         ? sorted[mid]
         : (sorted[mid - 1] + sorted[mid]) / 2;
 
-    const upperLimit = median * 1.1; // +10%
-    const lowerLimit = median * 0.5; // -50%
+    if (median === 0) return;
+    const upperLimit = median * 1.1;
+    const lowerLimit = median * 0.5;
 
     if (newPrice >= lowerLimit && newPrice <= upperLimit) return;
 
@@ -68,7 +70,7 @@ export class FraudService {
       )}% par rapport au prix médian (${median}€)`;
     }
 
-    const alert = await this.alertRepo.save({
+    const articleAlert = await this.alertRepo.save({
       article: { id: articleId },
       severity,
       reason,
@@ -78,23 +80,91 @@ export class FraudService {
     });
 
     this.fraudGateway.emitNewAlert({
-      id: alert.id,
+      id: articleAlert.id,
       article: { id: articleId, title: article.title },
       severity,
       reason,
       average_price: median,
       last_price_recorded: newPrice,
       diff_percent: Math.round(diffPercent),
-      created_at: alert.created_at,
+      created_at: articleAlert.created_at,
     });
 
-    return alert;
+    const responsibleUser = article.seller ?? article.shop?.owner ?? null;
+
+    let userAlert: FraudAlert | null = null;
+
+    if (responsibleUser) {
+      const userId = responsibleUser.id;
+
+      const userAlerts = await this.alertRepo
+        .createQueryBuilder('alert')
+        .leftJoin('alert.article', 'a')
+        .leftJoin('a.seller', 'seller')
+        .leftJoin('a.shop', 'shop')
+        .leftJoin('shop.owner', 'owner')
+        .where('seller.id = :userId OR owner.id = :userId', { userId })
+        .getMany();
+
+      const fraudulentCount = userAlerts.filter(
+        (a) => !a.reason.toLowerCase().includes('utilisateur'),
+      ).length;
+
+      if (fraudulentCount >= 2) {
+        const userReason = `L'utilisateur ${
+          responsibleUser.userName ?? responsibleUser.email
+        } a effectué au moins 2 modifications de prix jugées frauduleuses. Potentiellement arnaqueur.`;
+
+        userAlert = await this.alertRepo.save({
+          article: { id: articleId },
+          severity: FraudSeverity.HIGH,
+          reason: userReason,
+          average_price: median,
+          last_price_recorded: newPrice,
+          diff_percent: Math.round(diffPercent),
+        });
+
+        this.fraudGateway.emitNewAlert({
+          id: userAlert.id,
+          article: { id: articleId, title: article.title },
+          user_id: responsibleUser.id,
+          severity: userAlert.severity,
+          reason: userReason,
+          average_price: userAlert.average_price,
+          last_price_recorded: userAlert.last_price_recorded,
+          diff_percent: userAlert.diff_percent,
+          created_at: userAlert.created_at,
+        });
+      }
+    }
+
+    return {
+      articleAlert,
+      userAlert,
+    };
   }
 
   async getAlerts() {
-    return this.alertRepo.find({
-      relations: ['article'],
+    const alerts = await this.alertRepo.find({
+      relations: [
+        'article',
+        'article.seller',
+        'article.shop',
+        'article.shop.owner',
+      ],
       order: { created_at: 'DESC' },
+    });
+
+    return alerts.map((alert) => {
+      const responsibleUser =
+        alert.article?.seller ?? alert.article?.shop?.owner ?? null;
+
+      return {
+        ...alert,
+        user_id: alert.reason.toLowerCase().includes('utilisateur')
+          ? (responsibleUser?.id ?? null)
+          : null,
+      };
     });
   }
 

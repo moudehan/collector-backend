@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtUser } from 'src/auth/user.type';
+import { FraudAlert } from 'src/fraud/fraud-alert.entity';
 import { Repository } from 'typeorm';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User, UserRole } from './user.entity';
@@ -16,6 +17,9 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+
+    @InjectRepository(FraudAlert)
+    private readonly alertRepo: Repository<FraudAlert>,
   ) {}
 
   async findAllUsersWithStats() {
@@ -39,20 +43,29 @@ export class UsersService {
       .orderBy('user.created_at', 'DESC')
       .getMany();
 
-    return users.map((user) => ({
-      id: user.id,
-      email: user.email,
-      userName: user.userName,
-      firstname: user.firstname,
-      lastname: user.lastname,
-      role: user.role,
-      created_at: user.created_at,
-      stats: {
-        totalShops: user.shops?.length || 0,
-        totalArticles: user.articles?.length || 0,
-        totalNotifications: user.notifications?.length || 0,
-      },
-    }));
+    const results = await Promise.all(
+      users.map(async (user) => {
+        const isFraudulent = await this.isUserFraudulent(user.id);
+
+        return {
+          id: user.id,
+          email: user.email,
+          userName: user.userName,
+          firstname: user.firstname,
+          lastname: user.lastname,
+          role: user.role,
+          created_at: user.created_at,
+          isFraudulent,
+          stats: {
+            totalShops: user.shops?.length || 0,
+            totalArticles: user.articles?.length || 0,
+            totalNotifications: user.notifications?.length || 0,
+          },
+        };
+      }),
+    );
+
+    return results;
   }
 
   async getUserById(userId: string) {
@@ -63,6 +76,8 @@ export class UsersService {
 
     if (!user) throw new NotFoundException('Utilisateur introuvable');
 
+    const isFraudulent = await this.isUserFraudulent(userId);
+
     return {
       id: user.id,
       email: user.email,
@@ -71,6 +86,7 @@ export class UsersService {
       lastname: user.lastname,
       role: user.role,
       created_at: user.created_at,
+      isFraudulent,
       stats: {
         totalShops: user.shops.length,
         totalArticles: user.articles.length,
@@ -142,5 +158,22 @@ export class UsersService {
     await this.userRepo.remove(user);
 
     return { message: 'Utilisateur supprimé avec succès' };
+  }
+
+  async isUserFraudulent(userId: string): Promise<boolean> {
+    const alerts = await this.alertRepo
+      .createQueryBuilder('alert')
+      .leftJoin('alert.article', 'a')
+      .leftJoin('a.seller', 'seller')
+      .leftJoin('a.shop', 'shop')
+      .leftJoin('shop.owner', 'owner')
+      .where('seller.id = :userId OR owner.id = :userId', { userId })
+      .getMany();
+
+    const fraudulentCount = alerts.filter(
+      (alert) => !alert.reason.toLowerCase().includes('utilisateur'),
+    ).length;
+
+    return fraudulentCount >= 2;
   }
 }
