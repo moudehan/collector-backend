@@ -106,48 +106,6 @@ export class ArticlesService {
       await this.imgRepo.save(imageEntities);
     }
 
-    const interestedUsers = await this.likeRepo
-      .createQueryBuilder('like')
-      .leftJoin('like.article', 'article')
-      .leftJoin('like.user', 'user')
-      .where('article.categoryId = :categoryId', {
-        categoryId: dto.categoryId,
-      })
-      .select('user.id', 'userId')
-      .addSelect('COUNT(like.id)', 'total')
-      .groupBy('user.id')
-      .having('COUNT(like.id) >= 2')
-      .getRawMany<{ userId: string; total: number }>();
-
-    const userIdsToNotify = interestedUsers
-      .map((u) => u.userId)
-      .filter((id) => id !== userId);
-
-    for (const targetUserId of userIdsToNotify) {
-      const savedNotif = await this.notificationsService.send(
-        targetUserId,
-        NotificationType.NEW_ARTICLE,
-        {
-          article_id: savedArticle.id,
-          title: savedArticle.title,
-          categoryId: dto.categoryId,
-          message: 'Un nouvel article correspond à vos centres d’intérêt',
-        },
-        userId,
-      );
-
-      if (savedNotif) {
-        this.articleGateway.emitNewArticleInterest({
-          id: savedNotif.id,
-          type: NotificationType.NEW_ARTICLE,
-          title: savedArticle.title,
-          message: savedNotif.payload?.message,
-          article_id: savedArticle.id,
-          created_at: savedNotif.created_at,
-        });
-      }
-    }
-
     return this.repo.findOne({
       where: { id: savedArticle.id },
       relations: ['images'],
@@ -223,7 +181,10 @@ export class ArticlesService {
   }
 
   async approve(id: string) {
-    const article = await this.repo.findOne({ where: { id } });
+    const article = await this.repo.findOne({
+      where: { id },
+      relations: ['category', 'seller', 'shop'],
+    });
 
     if (!article) {
       throw new NotFoundException('Article introuvable.');
@@ -241,6 +202,49 @@ export class ArticlesService {
 
     article.status = ArticleStatus.APPROVED;
     await this.repo.save(article);
+
+    const interestedUsers = await this.likeRepo
+      .createQueryBuilder('like')
+      .leftJoin('like.article', 'articleLiked')
+      .leftJoin('like.user', 'user')
+      .where('articleLiked.categoryId = :categoryId', {
+        categoryId: article.category.id,
+      })
+      .select('user.id', 'userId')
+      .addSelect('COUNT(like.id)', 'total')
+      .groupBy('user.id')
+      .having('COUNT(like.id) >= 2')
+      .getRawMany<{ userId: string; total: number }>();
+
+    const userIdsToNotify = interestedUsers
+      .map((u) => u.userId)
+      .filter((id) => id !== article.seller.id);
+
+    for (const targetUserId of userIdsToNotify) {
+      const savedNotif = await this.notificationsService.send(
+        targetUserId,
+        NotificationType.NEW_ARTICLE,
+        {
+          article_id: article.id,
+          title: article.title,
+          categoryId: article.category.id,
+          message: 'Un article approuvé correspond à vos centres d’intérêt',
+        },
+        article.seller.id,
+      );
+
+      if (savedNotif && targetUserId !== article.seller.id) {
+        this.articleGateway.emitNewArticleInterest({
+          id: savedNotif.id,
+          type: NotificationType.NEW_ARTICLE,
+          title: article.title,
+          message: savedNotif.payload?.message,
+          article_id: article.id,
+          created_at: savedNotif.created_at,
+          userId: targetUserId,
+        });
+      }
+    }
 
     return {
       success: true,
@@ -520,7 +524,7 @@ export class ArticlesService {
         userId,
       );
 
-      if (savedNotif) {
+      if (savedNotif && f.user.id !== userId) {
         this.articleGateway.emitNewArticleInterest({
           id: savedNotif.id,
           type: NotificationType.ARTICLE_UPDATED,
@@ -528,6 +532,7 @@ export class ArticlesService {
           message: savedNotif.payload?.message,
           article_id: article.id,
           created_at: savedNotif.created_at,
+          userId: f.user.id,
         });
       }
     }
