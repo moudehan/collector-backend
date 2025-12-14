@@ -6,6 +6,7 @@ import { join } from 'path';
 import { AppGateway } from 'src/app.getway';
 import { ArticleRatingsModule } from 'src/articles/article-ratings.module';
 import { CategoriesModule } from 'src/categories/categories.module';
+import { ConversationReadState } from 'src/chat/conversation-read-state.entity';
 import { ConversationModule } from 'src/chat/conversation.module';
 import { Notification } from 'src/notifications/notification.entity';
 import { ShopRatingsModule } from 'src/shops/shop-ratings.module';
@@ -53,6 +54,7 @@ import { UsersModule } from './users/users.module';
     CategoriesModule,
     ArticleRatingsModule,
     ShopRatingsModule,
+    ConversationReadState,
   ],
   controllers: [],
   providers: [AppGateway],

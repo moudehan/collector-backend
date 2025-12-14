@@ -1,3 +1,4 @@
+import { ConversationReadState } from 'src/chat/conversation-read-state.entity';
 import {
   Column,
   CreateDateColumn,
@@ -31,6 +32,9 @@ export class Conversation {
     cascade: true,
   })
   messages: ConversationMessage[];
+
+  @OneToMany(() => ConversationReadState, (rs) => rs.conversation)
+  readStates: ConversationReadState[];
 
   @CreateDateColumn()
   created_at: Date;

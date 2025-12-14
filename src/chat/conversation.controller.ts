@@ -81,4 +81,22 @@ export class ConversationController {
   getConversationById(@Param('id') id: string) {
     return this.convService.findById(id);
   }
+
+  @Post(':id/read')
+  async markAsRead(
+    @Param('id') conversationId: string,
+    @CurrentUser() user: JwtUser,
+  ) {
+    await this.convService.markConversationAsRead(conversationId, user.sub);
+    return { success: true };
+  }
+
+  @Post(':id/unread')
+  async markAsUnread(
+    @Param('id') conversationId: string,
+    @CurrentUser() user: JwtUser,
+  ) {
+    await this.convService.markConversationAsUnread(conversationId, user.sub);
+    return { success: true };
+  }
 }
