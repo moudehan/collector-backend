@@ -1,15 +1,15 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
-import { User } from 'src/users/user.entity';
 import { Article } from 'src/articles/article.entity';
 import { FraudAlert, FraudSeverity } from 'src/fraud/fraud-alert.entity';
-import { ChatMessage } from 'src/chat/chat-message.entity';
+import { User } from 'src/users/user.entity';
 
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
+import { ConversationMessage } from 'src/chat/conversation-message.entity';
 import { UserRole } from 'src/users/user.entity';
 
 @Controller('admin')
@@ -20,7 +20,8 @@ export class AdminController {
     @InjectRepository(User) private usersRepo: Repository<User>,
     @InjectRepository(Article) private articleRepo: Repository<Article>,
     @InjectRepository(FraudAlert) private alertsRepo: Repository<FraudAlert>,
-    @InjectRepository(ChatMessage) private chatRepo: Repository<ChatMessage>,
+    @InjectRepository(ConversationMessage)
+    private chatRepo: Repository<ConversationMessage>,
   ) {}
 
   @Get('stats')

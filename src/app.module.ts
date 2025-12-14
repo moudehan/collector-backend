@@ -6,13 +6,13 @@ import { join } from 'path';
 import { AppGateway } from 'src/app.getway';
 import { ArticleRatingsModule } from 'src/articles/article-ratings.module';
 import { CategoriesModule } from 'src/categories/categories.module';
+import { ConversationModule } from 'src/chat/conversation.module';
 import { Notification } from 'src/notifications/notification.entity';
 import { ShopRatingsModule } from 'src/shops/shop-ratings.module';
 import { AdminModule } from './admin/admin.module';
 import { Article } from './articles/article.entity';
 import { ArticlesModule } from './articles/articles.module';
 import { AuthModule } from './auth/auth.module';
-import { ChatModule } from './chat/chat.module';
 import { FraudModule } from './fraud/fraud.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { Shop } from './shops/shop.entity';
@@ -48,7 +48,7 @@ import { UsersModule } from './users/users.module';
     ArticlesModule,
     NotificationsModule,
     FraudModule,
-    ChatModule,
+    ConversationModule,
     AdminModule,
     CategoriesModule,
     ArticleRatingsModule,
