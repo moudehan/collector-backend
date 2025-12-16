@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   postgres:
     image: postgres:14
@@ -11,6 +13,34 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.5
+    container_name: collector-keycloak
+    restart: always
+    depends_on:
+      - postgres
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_URL_DATABASE: collector_db
+      KC_DB_USERNAME: collector_user
+      KC_DB_PASSWORD: collector_password
+      KC_HOSTNAME: localhost
+    command:
+      - start-dev
+    ports:
+      - "8080:8080"
+
+  mailcatcher:
+    image: dockage/mailcatcher:latest
+    container_name: mailcatcher
+    restart: always
+    ports:
+      - "1025:1025"
+      - "1080:1080"
 
 volumes:
   pgdata:

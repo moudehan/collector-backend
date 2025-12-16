@@ -1,11 +1,16 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BlacklistedToken } from 'src/auth/blacklist.entity';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
+import { KeycloakJwtStrategy } from 'src/auth/keycloak.strategy';
 import { User } from 'src/users/user.entity';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
+import { RolesGuard } from './roles.guard';
 
 @Module({
   imports: [
@@ -14,9 +19,23 @@ import { JwtStrategy } from './jwt.strategy';
       secret: process.env.JWT_SECRET || 'supersecretkey',
       signOptions: { expiresIn: '1d' },
     }),
+    PassportModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    KeycloakJwtStrategy,
+    RolesGuard,
+    JwtAuthGuard,
+    KeycloakAuthGuard,
+  ],
+  exports: [
+    AuthService,
+    JwtAuthGuard,
+    KeycloakAuthGuard,
+    RolesGuard,
+    PassportModule,
+  ],
 })
 export class AuthModule {}

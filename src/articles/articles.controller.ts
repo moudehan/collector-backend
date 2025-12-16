@@ -11,7 +11,6 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { CurrentUser } from 'src/auth/user.decorator';
@@ -26,6 +25,7 @@ import type { File as MulterFile } from 'multer';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { UpdateArticleDto } from 'src/articles/dto/update-article.dto';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 
 @Controller('articles')
 export class ArticlesController {
@@ -36,7 +36,7 @@ export class ArticlesController {
     return this.service.publicCatalogue(categoryId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Post()
   @UseInterceptors(
     FilesInterceptor('images', 10, {
@@ -63,50 +63,51 @@ export class ArticlesController {
     return this.service.create(dto, images, user.sub);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Get('recommendations')
   getRecommendations(@CurrentUser() user: JwtUser) {
     return this.service.getRecommendations(user.sub, user.role);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Get('following')
   getFollowing(@CurrentUser() user: JwtUser) {
     return this.service.getFollowing(user.sub);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Get(':id')
   getOne(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.service.findOneById(id, user.sub);
   }
 
+  @UseGuards(KeycloakAuthGuard)
   @Delete(':id')
   async deleteArticle(@Param('id') id: string) {
     return this.service.delete(id);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Get('mine')
   myArticles(@CurrentUser() user: JwtUser) {
     return this.service.findMine(user.sub);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(KeycloakAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Patch(':id/approve')
   approve(@Param('id') id: string) {
     return this.service.approve(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(KeycloakAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Patch(':id/reject')
   reject(@Param('id') id: string) {
     return this.service.reject(id);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Get()
   privateCatalogue(
     @CurrentUser() user: JwtUser,
@@ -115,26 +116,26 @@ export class ArticlesController {
     return this.service.privateCatalogue(categoryId, user.sub);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Post(':id/follow')
   follow(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.service.follow(id, user.sub);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Delete(':id/follow')
   unfollow(@Param('id') id: string, @CurrentUser() user: JwtUser) {
     return this.service.unfollow(id, user.sub);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(KeycloakAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Patch(':id/price/:newPrice')
   updatePrice(@Param('id') id: string, @Param('newPrice') newPrice: string) {
     return this.service.updatePrice(id, Number(newPrice));
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Patch(':id')
   @UseInterceptors(
     FilesInterceptor('newImages', 10, {

@@ -19,14 +19,18 @@ export class RolesGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    if (!requiredRoles) return true;
+    if (!requiredRoles || requiredRoles.length === 0) {
+      return true;
+    }
 
     const req = context.switchToHttp().getRequest<{ user: JwtUser }>();
     const user = req.user;
 
-    if (!user) throw new ForbiddenException('Authentification requise');
+    if (!user) {
+      throw new ForbiddenException('Authentification requise');
+    }
 
-    if (!requiredRoles.includes(user.role as UserRole)) {
+    if (!requiredRoles.includes(user.role)) {
       throw new ForbiddenException('Accès refusé');
     }
 
