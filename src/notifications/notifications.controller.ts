@@ -1,16 +1,15 @@
 import { Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { CurrentUser } from 'src/auth/user.decorator';
 import type { JwtUser } from 'src/auth/user.type';
 import { NotificationsService } from './notifications.service';
 
 @Controller('notifications')
-@UseGuards(JwtAuthGuard)
+@UseGuards(KeycloakAuthGuard)
 export class NotificationsController {
   constructor(private readonly service: NotificationsService) {}
 
   @Get('my')
-  @UseGuards(JwtAuthGuard)
   getMyNotifications(@CurrentUser() user: JwtUser) {
     return this.service.getForUser(user.sub);
   }

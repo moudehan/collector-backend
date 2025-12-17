@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { UserRole } from 'src/users/user.entity';
@@ -9,7 +9,7 @@ import { FraudService } from './fraud.service';
 export class FraudController {
   constructor(private fraudService: FraudService) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(KeycloakAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Get('alerts')
   getAlerts() {

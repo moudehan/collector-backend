@@ -8,7 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { ArticleRatingsService } from './article-ratings.service';
 import { RateArticleDto } from './dto/rate-article.dto';
 
@@ -17,7 +17,7 @@ interface AuthRequest extends Request {
 }
 
 @Controller('article-ratings')
-@UseGuards(JwtAuthGuard)
+@UseGuards(KeycloakAuthGuard)
 export class ArticleRatingsController {
   constructor(private readonly ratingsService: ArticleRatingsService) {}
 

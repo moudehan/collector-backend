@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { CurrentUser } from 'src/auth/user.decorator';
@@ -12,28 +12,28 @@ import { ShopsService } from './shops.service';
 export class ShopsController {
   constructor(private shopsService: ShopsService) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Post()
   create(@Body() dto: CreateShopDto, @CurrentUser() user: JwtUser) {
-    return this.shopsService.createShop(dto, user.sub);
+    return this.shopsService.createShop(dto, user);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Get('my')
   getMyShops(@CurrentUser() user: JwtUser) {
-    return this.shopsService.getShopsByUser(user.sub);
+    return this.shopsService.getShopsByUser(user);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(KeycloakAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Get('admin/all')
   getAllShopsWithArticles() {
     return this.shopsService.getAllShopsWithArticles();
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   @Get(':id')
   getShopById(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.shopsService.getShopById(id, user.sub);
+    return this.shopsService.getShopById(id, user);
   }
 }

@@ -8,7 +8,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { CategoriesService } from 'src/categories/categories.service';
@@ -17,7 +17,7 @@ import { UpdateCategoryDto } from 'src/categories/dto/update-category.dto';
 import { UserRole } from 'src/users/user.entity';
 
 @Controller('admin/categories')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(KeycloakAuthGuard, RolesGuard)
 export class CategoriesController {
   constructor(private readonly service: CategoriesService) {}
 

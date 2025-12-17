@@ -6,6 +6,7 @@ import { BlacklistedToken } from 'src/auth/blacklist.entity';
 import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { KeycloakJwtStrategy } from 'src/auth/keycloak.strategy';
 import { User } from 'src/users/user.entity';
+import { UsersModule } from 'src/users/users.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -20,6 +21,7 @@ import { RolesGuard } from './roles.guard';
       signOptions: { expiresIn: '1d' },
     }),
     PassportModule,
+    UsersModule,
   ],
   controllers: [AuthController],
   providers: [

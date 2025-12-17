@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { NotificationMailService } from 'src/notifications/notification-mail.service';
 import { NotificationSettingsService } from 'src/notifications/notification-settings.service';
@@ -13,10 +13,13 @@ export class NotificationsService {
     private readonly repo: Repository<Notification>,
     private readonly gateway: NotificationsGateway,
     private readonly notificationSettingsService: NotificationSettingsService,
-    private readonly notificationMailService: NotificationMailService, // ✅ MAINTENANT IL EXISTE
+    private readonly notificationMailService: NotificationMailService,
   ) {}
 
   getForUser(userId: string) {
+    if (!userId) {
+      throw new BadRequestException('userId manquant pour getForUser');
+    }
     return this.repo.find({
       where: {
         user: { id: userId },
@@ -31,6 +34,9 @@ export class NotificationsService {
     payload: Record<string, unknown> = {},
     createdBy?: string,
   ): Promise<Notification | null> {
+    if (!userId) {
+      throw new BadRequestException('userId manquant pour send()');
+    }
     const settings = await this.notificationSettingsService.getOrCreate(userId);
 
     if (type === NotificationType.NEW_ARTICLE && !settings.NEW_ARTICLE) {
@@ -69,6 +75,9 @@ export class NotificationsService {
   }
 
   async markAllAsRead(userId: string) {
+    if (!userId) {
+      throw new BadRequestException('userId manquant pour markAllAsRead');
+    }
     const result = await this.repo.update(
       { user: { id: userId } },
       { is_read: true },
@@ -81,6 +90,9 @@ export class NotificationsService {
   }
 
   async markAllAsUnread(userId: string) {
+    if (!userId) {
+      throw new BadRequestException('userId manquant pour markAllAsUnread');
+    }
     const result = await this.repo.update(
       { user: { id: userId } },
       { is_read: false },

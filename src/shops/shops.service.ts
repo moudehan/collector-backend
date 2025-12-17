@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { JwtUser } from 'src/auth/user.type';
 import { ShopRating } from 'src/shops/shop-rating.entity';
 import { Shop } from 'src/shops/shop.entity';
-import { User } from 'src/users/user.entity';
+import { UsersService } from 'src/users/users.service';
 import { Repository } from 'typeorm';
 import { CreateShopDto } from './dto/create-shop.dto';
 
@@ -13,13 +14,15 @@ export class ShopsService {
     private readonly shopRepo: Repository<Shop>,
     @InjectRepository(ShopRating)
     private readonly shopRatingRepo: Repository<ShopRating>,
+    private readonly usersService: UsersService,
   ) {}
 
-  async createShop(dto: CreateShopDto, userId: string) {
+  async createShop(dto: CreateShopDto, jwtUser: JwtUser) {
+    const owner = await this.usersService.findOrCreateFromKeycloak(jwtUser);
     const existing = await this.shopRepo.findOne({
       where: {
         name: dto.name,
-        owner: { id: userId },
+        owner: { id: owner.id },
       },
     });
 
@@ -31,13 +34,14 @@ export class ShopsService {
 
     const shop = this.shopRepo.create({
       ...dto,
-      owner: { id: userId } as User,
+      owner: owner,
     });
 
     return this.shopRepo.save(shop);
   }
 
-  async getShopsByUser(userId: string) {
+  async getShopsByUser(jwtUser: JwtUser) {
+    const owner = await this.usersService.findOrCreateFromKeycloak(jwtUser);
     return this.shopRepo
       .createQueryBuilder('shop')
       .leftJoin('shop.owner', 'owner')
@@ -50,7 +54,7 @@ export class ShopsService {
         'owner.firstname',
         'owner.lastname',
       ])
-      .where('owner.id = :userId', { userId })
+      .where('owner.id = :userId', { userId: owner.id })
       .getMany();
   }
 
@@ -65,7 +69,14 @@ export class ShopsService {
     });
   }
 
-  async getShopById(shopId: string, userId?: string) {
+  async getShopById(shopId: string, jwtUser?: JwtUser) {
+    let currentUserId: string | undefined;
+
+    if (jwtUser) {
+      const user = await this.usersService.findOrCreateFromKeycloak(jwtUser);
+      currentUserId = user.id;
+    }
+
     const shop = await this.shopRepo
       .createQueryBuilder('shop')
       .leftJoin('shop.owner', 'owner')
@@ -103,11 +114,11 @@ export class ShopsService {
       throw new BadRequestException('Boutique introuvable');
     }
 
-    if (userId) {
+    if (currentUserId) {
       for (const article of shop.articles) {
         article.isFavorite =
           Array.isArray(article.likes) &&
-          article.likes.some((like) => like.user?.id === userId);
+          article.likes.some((like) => like.user?.id === currentUserId);
       }
     } else {
       for (const article of shop.articles) {
@@ -117,11 +128,11 @@ export class ShopsService {
 
     let userRating: number | null = null;
 
-    if (userId) {
+    if (currentUserId) {
       const rating = await this.shopRatingRepo.findOne({
         where: {
           shop: { id: shopId },
-          user: { id: userId },
+          user: { id: currentUserId },
         },
       });
 

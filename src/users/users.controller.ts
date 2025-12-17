@@ -7,7 +7,7 @@ import {
   Patch,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { CurrentUser } from 'src/auth/user.decorator';
@@ -17,7 +17,7 @@ import { UserRole } from './user.entity';
 import { UsersService } from './users.service';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(KeycloakAuthGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -43,7 +43,7 @@ export class UsersController {
     return this.usersService.updateUser(user.sub, user, body);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(KeycloakAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Delete(':id')
   deleteUser(@Param('id') id: string, @CurrentUser() user: JwtUser) {

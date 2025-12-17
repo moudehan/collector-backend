@@ -6,14 +6,14 @@ import { Article } from 'src/articles/article.entity';
 import { FraudAlert, FraudSeverity } from 'src/fraud/fraud-alert.entity';
 import { User } from 'src/users/user.entity';
 
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { ConversationMessage } from 'src/chat/conversation-message.entity';
 import { UserRole } from 'src/users/user.entity';
 
 @Controller('admin')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(KeycloakAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
 export class AdminController {
   constructor(

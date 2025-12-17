@@ -1,16 +1,16 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { CurrentUser } from 'src/auth/user.decorator';
 import type { JwtUser } from 'src/auth/user.type';
 import { ShopRatingsService } from './shop-ratings.service';
 
 @Controller('shop-ratings')
-@UseGuards(JwtAuthGuard)
+@UseGuards(KeycloakAuthGuard)
 export class ShopRatingsController {
   constructor(private readonly ratingsService: ShopRatingsService) {}
 
   @Post(':shopId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   rate(
     @Param('shopId') shopId: string,
     @Body('value') value: number,
@@ -20,7 +20,7 @@ export class ShopRatingsController {
   }
 
   @Get(':shopId/me')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(KeycloakAuthGuard)
   getMyRating(@Param('shopId') shopId: string, @CurrentUser() user: JwtUser) {
     return this.ratingsService.getUserRating(user.sub, shopId);
   }

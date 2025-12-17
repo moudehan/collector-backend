@@ -1,12 +1,12 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { CurrentUser } from 'src/auth/user.decorator';
 import type { JwtUser } from 'src/auth/user.type';
 import { ConversationMessageService } from './conversation-message.service';
 import { ConversationService } from './conversation.service';
 
 @Controller('conversations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(KeycloakAuthGuard)
 export class ConversationController {
   constructor(
     private readonly convService: ConversationService,

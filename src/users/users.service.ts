@@ -8,7 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtUser } from 'src/auth/user.type';
 import { FraudAlert } from 'src/fraud/fraud-alert.entity';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User, UserRole } from './user.entity';
 
@@ -21,6 +21,78 @@ export class UsersService {
     @InjectRepository(FraudAlert)
     private readonly alertRepo: Repository<FraudAlert>,
   ) {}
+
+  async findOrCreateFromKeycloak(jwtUser: JwtUser): Promise<User> {
+    const {
+      sub,
+      email,
+      role: jwtRole,
+      firstName,
+      lastName,
+      username,
+    } = jwtUser;
+
+    if (!sub) {
+      throw new BadRequestException('Token Keycloak invalide : sub manquant');
+    }
+
+    const validRoles = Object.values(UserRole) as string[];
+    const rawRole = (jwtRole as string | undefined) ?? UserRole.USER;
+    const safeRole: UserRole = validRoles.includes(rawRole)
+      ? (rawRole as UserRole)
+      : UserRole.USER;
+
+    let user = await this.userRepo.findOne({
+      where: { id: sub },
+    });
+
+    if (!user) {
+      const baseUserName =
+        username ?? email?.split('@')[0] ?? `user_${sub.substring(0, 8)}`;
+
+      let finalFirstName = firstName;
+      let finalLastName = lastName;
+
+      if (!finalFirstName && !finalLastName) {
+        if (baseUserName.includes('.')) {
+          const [rawFirst, rawLast] = baseUserName.split('.', 2);
+          finalFirstName =
+            rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
+          finalLastName =
+            rawLast.charAt(0).toUpperCase() + rawLast.slice(1).toLowerCase();
+        } else {
+          const formatted =
+            baseUserName.charAt(0).toUpperCase() +
+            baseUserName.slice(1).toLowerCase();
+          finalFirstName = formatted;
+          finalLastName = formatted;
+        }
+      } else {
+        const fallback =
+          baseUserName.charAt(0).toUpperCase() +
+          baseUserName.slice(1).toLowerCase();
+        finalFirstName = finalFirstName ?? finalLastName ?? fallback;
+        finalLastName = finalLastName ?? finalFirstName ?? fallback;
+      }
+
+      const dummyPasswordHash = await bcrypt.hash(sub, 10);
+
+      const partial: DeepPartial<User> = {
+        id: sub,
+        email: email ?? `${baseUserName}@no-email.local`,
+        userName: baseUserName,
+        firstname: finalFirstName,
+        lastname: finalLastName,
+        role: safeRole,
+        password_hash: dummyPasswordHash,
+      };
+
+      user = this.userRepo.create(partial);
+      user = await this.userRepo.save(user);
+    }
+
+    return user;
+  }
 
   async findAllUsersWithStats() {
     const users = await this.userRepo

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
 import { NotificationSettingsService } from './notification-settings.service';
 
@@ -15,7 +15,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 @Controller('notifications/notification-settings')
-@UseGuards(JwtAuthGuard)
+@UseGuards(KeycloakAuthGuard)
 export class NotificationSettingsController {
   constructor(
     private readonly notificationSettingsService: NotificationSettingsService,
