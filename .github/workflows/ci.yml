@@ -31,6 +31,10 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     needs: quality_and_build
+    env:
+      KEYCLOAK_ISSUER: http://localhost:8081/realms/collector
+      KEYCLOAK_CLIENT_ID: collector-api
+      KEYCLOAK_CLIENT_SECRET: dummy-secret
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
