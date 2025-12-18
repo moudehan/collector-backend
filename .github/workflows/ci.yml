@@ -19,7 +19,8 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --registry=https://registry.npmjs.org/
+
 
       - name: Lint
         run: npm run lint
@@ -35,7 +36,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci
+      - run: npm ci --registry=https://registry.npmjs.org/
+
 
       - name: Unit tests
         run: npm test
@@ -52,7 +54,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci
+      - run: npm ci --registry=https://registry.npmjs.org/
+
 
       - name: Audit deps (SCA)
         run: npm audit --audit-level=high || true
