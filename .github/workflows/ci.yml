@@ -1,0 +1,117 @@
+name: CI-CD Backend
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  quality_and_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+  tests:
+    runs-on: ubuntu-latest
+    needs: quality_and_build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      # Tu réactiveras ça quand tu auras un script test:integration
+      # - name: Integration tests
+      #   run: npm run test:integration
+
+  security:
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+
+      - name: Audit deps (SCA)
+        run: npm audit --audit-level=high || true
+
+      # - name: Secret scan (GitHub secret scanning natif + éventuellement outil externe)
+      #   run: echo "TODO: ajouter un outil de scan de secrets ou s'appuyer sur GitHub Advanced Security"
+
+  build_and_docker:
+    runs-on: ubuntu-latest
+    needs: security
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build app
+        run: npm run build
+
+      - name: Build Docker image
+        run: | 
+          docker build -t ghcr.io/${{ github.repository_owner }}/collector-api:${{ github.sha }} .
+          # docker push ghcr.io/${{ github.repository_owner }}/collector-api:${{ github.sha }}
+
+  # deploy_staging:
+  #   runs-on: ubuntu-latest
+  #   needs: build_and_docker
+  #   if: github.ref == 'refs/heads/main'
+  #   steps:
+  #     - name: Configure kubectl
+  #       run: |
+  #         echo "TODO: configurer kubectl (KUBECONFIG ou context via secrets)"
+  #     - name: Deploy to staging
+  #       run: |
+  #         kubectl apply -f k8s/deployment-api-staging.yaml
+  #         # ou helm upgrade ...
+
+  # e2e_and_load_tests:
+  #   runs-on: ubuntu-latest
+  #   needs: deploy_staging
+  #   steps:
+  #     - name: Run API E2E tests
+  #       run: npm run test:e2e
+
+  #     - name: Run load tests (JMeter / Siege)
+  #       run: |
+  #         echo "TODO: lancer jmeter/siege contre l'URL de staging"
+
+  # deploy_prod:
+  #   runs-on: ubuntu-latest
+  #   needs: e2e_and_load_tests
+  #   if: github.ref == 'refs/heads/main'
+  #   environment:
+  #     name: production
+  #     url: https://api.collector.shop
+  #   steps:
+  #     - name: Manual approval gate
+  #       run: echo "Cette étape nécessite l'approbation manuelle dans GitHub (environnement 'production')."
+
+  #     - name: Deploy to prod
+  #       run: |
+  #         kubectl apply -f k8s/deployment-api-prod.yaml
