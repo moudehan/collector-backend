@@ -1,8 +1,16 @@
 import { Type } from 'class-transformer';
-import { IsNotEmpty, IsNumber, IsString, IsUUID } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class CreateArticleDto {
-  [x: string]: any;
   @IsString()
   @IsNotEmpty({ message: 'Le titre est obligatoire' })
   title: string;
@@ -24,4 +32,31 @@ export class CreateArticleDto {
 
   @IsUUID(undefined, { message: 'Une catégorie valide est requise' })
   categoryId: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'La quantité doit être un entier' })
+  @Min(1, { message: 'La quantité minimale est 1' })
+  quantity?: number;
+
+  @IsOptional()
+  @IsString({ message: "L'époque doit être une chaîne de caractères" })
+  vintageEra?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "L'année de production doit être un entier" })
+  @Min(1900, { message: "L'année minimale est 1900" })
+  @Max(new Date().getFullYear() + 1, {
+    message: "L'année de production est trop élevée",
+  })
+  productionYear?: number;
+
+  @IsOptional()
+  @IsString({ message: "L'état doit être une chaîne de caractères" })
+  conditionLabel?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Les notes vintage doivent être une chaîne' })
+  vintageNotes?: string;
 }

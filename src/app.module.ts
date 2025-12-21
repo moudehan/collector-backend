@@ -5,10 +5,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { join } from 'path';
 import { AppGateway } from 'src/app.getway';
 import { ArticleRatingsModule } from 'src/articles/article-ratings.module';
+import { CartModule } from 'src/cart/cart.module';
 import { CategoriesModule } from 'src/categories/categories.module';
 import { ConversationReadState } from 'src/chat/conversation-read-state.entity';
 import { ConversationModule } from 'src/chat/conversation.module';
+import { CheckoutModule } from 'src/checkout/checkout.module';
 import { Notification } from 'src/notifications/notification.entity';
+import { ShippingAddressModule } from 'src/shipping-adress/shipping-adress.module';
 import { ShopRatingsModule } from 'src/shops/shop-ratings.module';
 import { AdminModule } from './admin/admin.module';
 import { Article } from './articles/article.entity';
@@ -55,6 +58,9 @@ import { UsersModule } from './users/users.module';
     ArticleRatingsModule,
     ShopRatingsModule,
     ConversationReadState,
+    CartModule,
+    ShippingAddressModule,
+    CheckoutModule,
   ],
   controllers: [],
   providers: [AppGateway],

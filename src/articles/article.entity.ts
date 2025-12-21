@@ -85,6 +85,21 @@ export class Article {
   @Column({ default: 0 })
   ratingsCount: number;
 
+  @Column({ type: 'int', default: 1 })
+  quantity: number;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  vintageEra: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  productionYear: number | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  conditionLabel: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  vintageNotes: string | null;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
 

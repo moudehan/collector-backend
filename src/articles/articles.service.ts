@@ -83,6 +83,9 @@ export class ArticlesService {
       });
     }
 
+    const quantity =
+      typeof dto.quantity === 'number' && dto.quantity > 0 ? dto.quantity : 1;
+
     const article = this.repo.create({
       title: dto.title,
       description: dto.description,
@@ -92,6 +95,11 @@ export class ArticlesService {
       seller: { id: userId } as User,
       shop: { id: dto.shopId } as Shop,
       category: { id: dto.categoryId } as Category,
+      quantity,
+      vintageEra: dto.vintageEra ?? null,
+      productionYear: dto.productionYear ?? null,
+      conditionLabel: dto.conditionLabel ?? null,
+      vintageNotes: dto.vintageNotes ?? null,
     });
 
     const savedArticle = await this.repo.save(article);
@@ -108,14 +116,14 @@ export class ArticlesService {
 
     return this.repo.findOne({
       where: { id: savedArticle.id },
-      relations: ['images'],
+      relations: ['images', 'category', 'shop'],
     });
   }
 
   findMine(userId: string) {
     return this.repo.find({
       where: { seller: { id: userId } },
-      relations: ['shop'],
+      relations: ['shop', 'images', 'category'],
     });
   }
 
@@ -262,7 +270,9 @@ export class ArticlesService {
       .leftJoinAndSelect('article.shop', 'shop')
       .leftJoinAndSelect('article.seller', 'seller')
       .leftJoinAndSelect('article.images', 'images')
-      .where('article.status = :status', { status: ArticleStatus.APPROVED });
+      .leftJoinAndSelect('article.category', 'category')
+      .where('article.status = :status', { status: ArticleStatus.APPROVED })
+      .andWhere('article.quantity > 0');
 
     if (categoryId) {
       query.andWhere('article.categoryId = :categoryId', { categoryId });
@@ -279,7 +289,9 @@ export class ArticlesService {
       .leftJoinAndSelect('article.images', 'images')
       .leftJoinAndSelect('article.likes', 'likes')
       .leftJoin('likes.user', 'likeUser')
-      .where('article.status = :status', { status: ArticleStatus.APPROVED });
+      .leftJoinAndSelect('article.category', 'category')
+      .where('article.status = :status', { status: ArticleStatus.APPROVED })
+      .andWhere('article.quantity > 0');
 
     if (userId) {
       query.andWhere('seller.id != :userId', { userId });
@@ -498,6 +510,26 @@ export class ArticlesService {
       article.category = { id: dto.categoryId } as Category;
     }
 
+    if (dto.quantity !== undefined && dto.quantity > 0) {
+      article.quantity = dto.quantity;
+    }
+
+    if (dto.vintageEra !== undefined) {
+      article.vintageEra = dto.vintageEra || null;
+    }
+
+    if (dto.productionYear !== undefined) {
+      article.productionYear = dto.productionYear ?? null;
+    }
+
+    if (dto.conditionLabel !== undefined) {
+      article.conditionLabel = dto.conditionLabel || null;
+    }
+
+    if (dto.vintageNotes !== undefined) {
+      article.vintageNotes = dto.vintageNotes || null;
+    }
+
     await this.repo.save(article);
 
     const updated = await this.repo.findOne({
@@ -559,11 +591,7 @@ export class ArticlesService {
       (catId) => categoryScore[catId] >= 2,
     );
 
-    console.log('Category score =', categoryScore);
-    console.log('Preferred categories =', preferredCategories);
-
     if (preferredCategories.length === 0) {
-      console.log('Aucune catégorie assez likée → pas de recommandations');
       return [];
     }
 
@@ -574,11 +602,13 @@ export class ArticlesService {
       .leftJoinAndSelect('article.category', 'category')
       .leftJoinAndSelect('article.shop', 'shop')
       .leftJoinAndSelect('article.seller', 'seller')
+      .leftJoinAndSelect('article.images', 'images')
       .where('category.id IN (:...cats)', { cats: preferredCategories })
-      .andWhere('article.status = :status', { status: ArticleStatus.APPROVED })
+      .andWhere('article.status = :status', {
+        status: ArticleStatus.APPROVED,
+      })
+      .andWhere('article.quantity > 0')
       .getMany();
-
-    console.log('RAW RECOMMENDATIONS =', recommendations);
 
     const finalList = recommendations.filter((a) => {
       const isLiked = likedIds.has(a.id);
