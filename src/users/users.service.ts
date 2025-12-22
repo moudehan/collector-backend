@@ -12,6 +12,21 @@ import { DeepPartial, Repository } from 'typeorm';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User, UserRole } from './user.entity';
 
+export interface UserProfileWithStatsDto {
+  id: string;
+  email: string;
+  userName: string;
+  firstname: string;
+  lastname: string;
+  role: UserRole;
+  created_at: Date;
+  stats: {
+    totalShops: number;
+    totalArticles: number;
+    totalNotifications: number;
+  };
+}
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -22,7 +37,9 @@ export class UsersService {
     private readonly alertRepo: Repository<FraudAlert>,
   ) {}
 
-  async findOrCreateFromKeycloak(jwtUser: JwtUser): Promise<User> {
+  async findOrCreateFromKeycloak(
+    jwtUser: JwtUser,
+  ): Promise<UserProfileWithStatsDto> {
     const {
       sub,
       email,
@@ -91,7 +108,35 @@ export class UsersService {
       user = await this.userRepo.save(user);
     }
 
-    return user;
+    const userWithRelations = await this.userRepo.findOne({
+      where: { id: user.id },
+      relations: ['shops', 'articles', 'notifications'],
+    });
+
+    if (!userWithRelations) {
+      throw new NotFoundException('Utilisateur introuvable après création');
+    }
+
+    const totalShops = userWithRelations.shops?.length ?? 0;
+    const totalArticles = userWithRelations.articles?.length ?? 0;
+    const totalNotifications = userWithRelations.notifications?.length ?? 0;
+
+    const result: UserProfileWithStatsDto = {
+      id: userWithRelations.id,
+      email: userWithRelations.email,
+      userName: userWithRelations.userName,
+      firstname: userWithRelations.firstname,
+      lastname: userWithRelations.lastname,
+      role: userWithRelations.role,
+      created_at: userWithRelations.created_at,
+      stats: {
+        totalShops,
+        totalArticles,
+        totalNotifications,
+      },
+    };
+
+    return result;
   }
 
   async findAllUsersWithStats() {
