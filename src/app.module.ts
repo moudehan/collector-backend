@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -23,10 +23,41 @@ import { Shop } from './shops/shop.entity';
 import { ShopsModule } from './shops/shops.module';
 import { User } from './users/user.entity';
 import { UsersModule } from './users/users.module';
+
+import { WinstonModule } from 'nest-winston';
+import * as winston from 'winston';
+import { HttpLoggerMiddleware } from './common/middleware/http-logger.middleware';
+
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    WinstonModule.forRoot({
+      transports: [
+        new winston.transports.Console({
+          format: winston.format.combine(
+            winston.format.timestamp(),
+            winston.format.json(),
+          ),
+        }),
+        new winston.transports.File({
+          filename: 'logs/app.log',
+          format: winston.format.combine(
+            winston.format.timestamp(),
+            winston.format.json(),
+          ),
+        }),
+      ],
+    }),
+
+    PrometheusModule.register({
+      path: '/metrics',
+      defaultLabels: {
+        app: 'collector-backend',
+      },
     }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
@@ -34,7 +65,6 @@ import { UsersModule } from './users/users.module';
     }),
     TypeOrmModule.forRoot({
       logging: ['query', 'error'],
-
       type: 'postgres',
       host: process.env.DB_HOST,
       port: parseInt(process.env.DB_PORT ?? '5432', 10),
@@ -65,4 +95,9 @@ import { UsersModule } from './users/users.module';
   controllers: [],
   providers: [AppGateway],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    // 👇 applique le middleware de logs HTTP sur toutes les routes
+    consumer.apply(HttpLoggerMiddleware).forRoutes('*');
+  }
+}

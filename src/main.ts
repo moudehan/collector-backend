@@ -1,11 +1,13 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    cors: true,
+    bufferLogs: true,
   });
+  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -18,7 +20,7 @@ async function bootstrap() {
     }),
   );
   app.enableCors({
-    origin: true,
+    origin: [process.env.FRONT_URL, process.env.FRONT_BACKOFFICE_URL],
     credentials: true,
   });
 
