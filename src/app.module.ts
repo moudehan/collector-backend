@@ -60,7 +60,7 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
       },
     }),
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads'),
+      rootPath: join(process.cwd(), 'uploads'),
       serveRoot: '/uploads',
     }),
     TypeOrmModule.forRoot({
@@ -97,7 +97,6 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    // 👇 applique le middleware de logs HTTP sur toutes les routes
     consumer.apply(HttpLoggerMiddleware).forRoutes('*');
   }
 }
