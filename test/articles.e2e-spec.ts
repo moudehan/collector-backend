@@ -1,4 +1,3 @@
-// test/articles.e2e-spec.ts
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 

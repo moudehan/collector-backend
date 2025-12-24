@@ -1,4 +1,3 @@
-// test/shops.e2e-spec.ts
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 
@@ -40,6 +39,22 @@ describe('Shops – tests d’intégration', () => {
       .expect(201);
 
     expect(shopsMock.createShop).toHaveBeenCalledTimes(1);
+  });
+
+  it('POST /shops -> 400 si payload invalide (name manquant)', async () => {
+    const shopsMock = makeShopsServiceMock();
+
+    app = await createE2eApp({
+      authenticated: true,
+      providerOverrides: [
+        { token: ShopsService, useValue: shopsMock },
+        overrideCheckoutService(),
+      ],
+    });
+
+    await request(getServer(app)).post('/shops').send({}).expect(400);
+
+    expect(shopsMock.createShop).not.toHaveBeenCalled();
   });
 
   it('POST /shops -> 401 quand non authentifié', async () => {

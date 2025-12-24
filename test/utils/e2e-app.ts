@@ -4,6 +4,7 @@ import {
   INestApplication,
   Type,
   UnauthorizedException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
@@ -104,6 +105,13 @@ export async function createE2eApp(
 
   const moduleFixture = await builder.compile();
   const app = moduleFixture.createNestApplication();
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
   await app.init();
   return app;
 }
