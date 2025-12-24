@@ -467,10 +467,6 @@ export class ArticlesService {
     );
 
     if (imagesToDelete.length > 0) {
-      console.log(
-        '🗑 DELETE =',
-        imagesToDelete.map((i) => i.id),
-      );
       await this.imgRepo.delete(imagesToDelete.map((img) => img.id));
     }
 

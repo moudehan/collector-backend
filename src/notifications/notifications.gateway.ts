@@ -13,7 +13,6 @@ export class NotificationsGateway {
 
   @SubscribeMessage('join_notifications')
   joinRoom(@MessageBody() userId: string) {
-    console.log('User joined notif WS:', userId);
     return { joined: `user_${userId}` };
   }
 
