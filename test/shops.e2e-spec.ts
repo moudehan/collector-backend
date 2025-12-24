@@ -14,6 +14,7 @@ import { UserRole } from '../src/users/user.entity';
 import { RolesGuard } from '../src/auth/roles.guard';
 
 import { ShopsService } from '../src/shops/shops.service';
+import { CheckoutService } from 'src/checkout/checkout.service';
 
 type CreateAppOpts = {
   authenticated: boolean;
@@ -71,6 +72,11 @@ async function createTestApp({
       }),
     })
 
+    .overrideProvider(CheckoutService)
+    .useValue({
+      createPaymentIntent: jest.fn().mockResolvedValue({ id: 'pi_test' }),
+      confirmPayment: jest.fn().mockResolvedValue({ status: 'succeeded' }),
+    })
     .overrideGuard(KeycloakAuthGuard)
     .useValue({
       canActivate: (context: ExecutionContext): boolean => {
