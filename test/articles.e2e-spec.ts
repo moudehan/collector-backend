@@ -16,6 +16,7 @@ describe('Articles – e2e (public + authentifié)', () => {
     })
       .overrideGuard(KeycloakAuthGuard)
       .useValue({
+        createPaymentIntent: jest.fn().mockResolvedValue({ id: 'pi_test' }),
         canActivate: (context: ExecutionContext): boolean => {
           const httpContext = context.switchToHttp();
 
@@ -52,7 +53,7 @@ describe('Articles – e2e (public + authentifié)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
   });
 
   it('GET /articles/public doit répondre 200 (route publique)', async () => {
