@@ -300,30 +300,46 @@ jobs:
           cluster_name: staging
 
       - name: Build Docker image
-        run: docker build -t collector-api:ci .
+        run: |
+          docker build -t collector-api:ci .
 
       - name: Load image into kind
-        run: kind load docker-image collector-api:ci --name staging
+        run: |
+          kind load docker-image collector-api:ci --name staging
 
       - name: Deploy to Kubernetes (staging)
         shell: bash
         run: |
           set -e
           kubectl apply -f k8s/staging.yaml
+
           kubectl -n staging rollout status deploy/postgres --timeout=180s
           kubectl -n staging rollout status deploy/api --timeout=180s
 
-      - name: Smoke test API
+          kubectl -n staging wait --for=condition=Ready pod -l app=postgres --timeout=180s
+          kubectl -n staging wait --for=condition=Ready pod -l app=api --timeout=180s
+
+      - name: Smoke test API (inside cluster, no port-forward)
         shell: bash
         run: |
           set -e
           kubectl -n staging run curltest --rm -i --restart=Never \
             --image=curlimages/curl:8.5.0 \
             --command -- sh -lc '
-              code=$(curl -s -o /dev/null -w "%{http_code}" http://api:4000/ || true)
-              echo "HTTP=$code"
-              [ "$code" != "000" ]
+              for i in $(seq 1 20); do
+                code=$(curl -s -o /dev/null -w "%{http_code}" http://api:4000/articles || true)
+                echo "try $i => HTTP $code"
+                if [ "$code" != "000" ]; then
+                  echo "API reachable (HTTP $code)"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "API not reachable"
+              exit 1
             '
+
+
 
     # deploy_prod:
     #   runs-on: ubuntu-latest
