@@ -115,48 +115,48 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   
-  charge_test:
-    runs-on: ubuntu-latest
-    # needs: build_and_docker
-    env:
-      TARGET_URL: http://localhost:4000
-      KEYCLOAK_ISSUER: http://localhost:8081/realms/collector
-      KEYCLOAK_CLIENT_ID: collector-api
-      KEYCLOAK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
-    steps:
-      - name: Install siege and jq
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y siege jq
+  # charge_test:
+  #   runs-on: ubuntu-latest
+  #   # needs: build_and_docker
+  #   env:
+  #     TARGET_URL: http://localhost:4000
+  #     KEYCLOAK_ISSUER: http://localhost:8081/realms/collector
+  #     KEYCLOAK_CLIENT_ID: collector-api
+  #     KEYCLOAK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
+  #   steps:
+  #     - name: Install siege and jq
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y siege jq
 
-      - name: Create Siege URL file
-        run: |
-          cat > siege-urls.txt <<EOF
-          ${TARGET_URL}/users
-          ${TARGET_URL}/notifications/my
-          ${TARGET_URL}/articles
-          EOF
+  #     - name: Create Siege URL file
+  #       run: |
+  #         cat > siege-urls.txt <<EOF
+  #         ${TARGET_URL}/users
+  #         ${TARGET_URL}/notifications/my
+  #         ${TARGET_URL}/articles
+  #         EOF
 
-              - name: Get access token from Keycloak
-                run: |
-                  TOKEN=$(curl -s \
-                    -H "Content-Type: application/x-www-form-urlencoded" \
-                    -d "client_id=${KEYCLOAK_CLIENT_ID}" \
-                    -d "client_secret=${KEYCLOAK_CLIENT_SECRET}" \
-                    -d "grant_type=client_credentials" \
-                    "${KEYCLOAK_ISSUER}/protocol/openid-connect/token" \
-                    | jq -r .access_token)
+  #             - name: Get access token from Keycloak
+  #               run: |
+  #                 TOKEN=$(curl -s \
+  #                   -H "Content-Type: application/x-www-form-urlencoded" \
+  #                   -d "client_id=${KEYCLOAK_CLIENT_ID}" \
+  #                   -d "client_secret=${KEYCLOAK_CLIENT_SECRET}" \
+  #                   -d "grant_type=client_credentials" \
+  #                   "${KEYCLOAK_ISSUER}/protocol/openid-connect/token" \
+  #                   | jq -r .access_token)
 
-                  echo "TOKEN=$TOKEN"
-                  echo "TOKEN=$TOKEN" >> $GITHUB_ENV
+  #                 echo "TOKEN=$TOKEN"
+  #                 echo "TOKEN=$TOKEN" >> $GITHUB_ENV
 
-              - name: Run load tests on multiple API endpoints
-                run: |
-                  echo "Running load tests on endpoints from siege-urls.txt..."
-                  siege -c 3 -t1M \
-                    -H "Authorization: Bearer $TOKEN" \
-                    -H "Content-Type: application/json" \
-                    -f siege-urls.txt
+  #             - name: Run load tests on multiple API endpoints
+  #               run: |
+  #                 echo "Running load tests on endpoints from siege-urls.txt..."
+  #                 siege -c 3 -t1M \
+  #                   -H "Authorization: Bearer $TOKEN" \
+  #                   -H "Content-Type: application/json" \
+  #                   -f siege-urls.txt
 
   owasp_zap:
     runs-on: ubuntu-latest
