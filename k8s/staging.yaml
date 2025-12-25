@@ -77,6 +77,16 @@ spec:
               value: collector_password
             - name: DB_NAME
               value: collector_db
+            - name: KEYCLOAK_ISSUER
+              value: "http://dummy/realms/collector"
+            - name: KEYCLOAK_JWKS_URI
+              value: "http://dummy/realms/collector/protocol/openid-connect/certs"
+            - name: KEYCLOAK_AUDIENCE
+              value: "collector-frontend"
+            - name: STRIPE_SECRET_KEY
+              value: "sk_test_dummy"
+
+
 ---
 apiVersion: v1
 kind: Service
