@@ -181,15 +181,10 @@ jobs:
 
   owasp_zap:
     runs-on: ubuntu-latest
-    # Tu peux mettre needs: build_and_docker si tu veux l'enchaîner,
-    # mais je ne touche pas tes dépendances existantes.
     env:
       API_PORT: 4000
       API_BASE_URL: http://127.0.0.1:4000
 
-      # IMPORTANT :
-      # - Depuis les conteneurs (dans ci-net) => Keycloak = collector-keycloak:8080
-      # - Depuis le runner (localhost) => Keycloak = 127.0.0.1:8081
       KEYCLOAK_HOST: collector-keycloak
       KEYCLOAK_ISSUER: http://collector-keycloak:8080/realms/collector
       KEYCLOAK_CLIENT_ID: collector-api
@@ -202,62 +197,39 @@ jobs:
       DB_NAME: collector_db
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 1) npm audit (report)
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: npm audit (report, non-bloquant)
-        run: |
-          npm audit --audit-level=high --json > npm-audit.json || true
-          echo "npm audit report generated: npm-audit.json"
-
-      - name: Upload npm audit report
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-audit-report
-          path: npm-audit.json
-
-      # 2) Build image
+      - run: npm ci
+      - name: npm audit (non-bloquant)
+        run: npm audit --audit-level=high --json > npm-audit.json || true
+        
       - name: Build API Docker image
         run: docker build -t collector-api:${{ github.sha }} .
 
       - name: Create CI Docker network
         run: docker network create ci-net || true
 
-      # 3) Postgres
-      - name: Run Postgres for API
+      - name: Run Postgres
         run: |
           docker run -d --name collector-postgres \
             --network ci-net \
             -e POSTGRES_USER=${DB_USER} \
             -e POSTGRES_PASSWORD=${DB_PASSWORD} \
             -e POSTGRES_DB=${DB_NAME} \
-            -p 5433:5432 \
-            postgres:14
+            -p 5433:5432 postgres:14
 
-          echo "Waiting for Postgres..."
-          for i in {1..30}; do
-            if docker exec collector-postgres pg_isready -U ${DB_USER} -d ${DB_NAME}; then
-              echo "Postgres ready"
-              exit 0
-            fi
+          for i in {1..20}; do
+            docker exec collector-postgres pg_isready -U ${DB_USER} -d ${DB_NAME} && exit 0
             sleep 2
           done
-          echo "Postgres not ready"
           docker logs collector-postgres || true
           exit 1
 
-      # 4) Keycloak (exposé en 8081 sur le runner, 8080 en interne)
-      - name: Run Keycloak
+      - name: Run Keycloak (host=8081, internal=8080)
         run: |
           docker run -d --name collector-keycloak \
             --network ci-net \
@@ -269,8 +241,7 @@ jobs:
             quay.io/keycloak/keycloak:24.0.5 \
             start-dev --health-enabled=true
 
-          echo "Waiting for Keycloak ready..."
-          curl --fail --retry 40 --retry-all-errors --retry-delay 3 \
+          curl --fail --retry 30 --retry-all-errors --retry-delay 3 \
             http://127.0.0.1:8081/health/ready
 
       - name: Configure Keycloak (realm + client)
@@ -278,14 +249,10 @@ jobs:
           set -e
 
           docker exec collector-keycloak /opt/keycloak/bin/kcadm.sh config credentials \
-            --server http://127.0.0.1:8080 \
-            --realm master \
-            --user admin \
-            --password admin
+            --server http://127.0.0.1:8080 --realm master --user admin --password admin
 
           docker exec collector-keycloak /opt/keycloak/bin/kcadm.sh get realms/collector >/dev/null 2>&1 \
-            || docker exec collector-keycloak /opt/keycloak/bin/kcadm.sh create realms \
-              -s realm=collector -s enabled=true
+            || docker exec collector-keycloak /opt/keycloak/bin/kcadm.sh create realms -s realm=collector -s enabled=true
 
           CLIENT_UUID=$(docker exec collector-keycloak /opt/keycloak/bin/kcadm.sh get clients -r collector \
             -q clientId=${KEYCLOAK_CLIENT_ID} --fields id --format csv | tail -n 1 | tr -d '\r')
@@ -299,14 +266,9 @@ jobs:
               -s directAccessGrantsEnabled=true \
               -s standardFlowEnabled=false \
               -s secret="${KEYCLOAK_CLIENT_SECRET}"
-          else
-            docker exec collector-keycloak /opt/keycloak/bin/kcadm.sh update clients/${CLIENT_UUID} -r collector \
-              -s secret="${KEYCLOAK_CLIENT_SECRET}" \
-              -s serviceAccountsEnabled=true
           fi
 
-      # 5) Run API
-      - name: Run API container for ZAP
+      - name: Run API
         run: |
           docker run -d --name collector-api \
             --network ci-net \
@@ -323,45 +285,33 @@ jobs:
             -e STRIPE_SECRET_KEY=sk_test_dummy \
             collector-api:${{ github.sha }}
 
-      - name: Wait for API to be up
+      - name: Wait for API (accept 200/401/403)
         run: |
-          for i in {1..20}; do
+          for i in {1..15}; do
             CODE=$(curl -s -o /dev/null -w "%{http_code}" ${API_BASE_URL}/articles || true)
-            if echo "$CODE" | grep -Eq "^(200|401|403)$"; then
-              echo "API is up (HTTP $CODE)"
-              exit 0
-            fi
-            echo "API not ready yet... (try $i/20) HTTP=$CODE"
-            sleep 3
+            echo "try $i/15 HTTP=$CODE"
+            echo "$CODE" | grep -Eq "^(200|401|403)$" && exit 0
+            sleep 2
           done
-          echo "API never became ready"
           docker logs --tail=200 collector-api || true
           exit 1
 
-      - name: Install jq
+      - name: Get Keycloak token (python)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-
-      - name: Get Keycloak token for ZAP (client_credentials)
-        run: |
-          TOKEN=$(curl -s \
+          RESP=$(curl -s \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "client_id=${KEYCLOAK_CLIENT_ID}" \
             -d "client_secret=${KEYCLOAK_CLIENT_SECRET}" \
             -d "grant_type=client_credentials" \
-            "http://127.0.0.1:8081/realms/collector/protocol/openid-connect/token" \
-            | jq -r .access_token)
+            "http://127.0.0.1:8081/realms/collector/protocol/openid-connect/token")
 
-          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-            echo "Failed to get token"
-            docker logs --tail=200 collector-keycloak || true
-            exit 1
+          TOKEN=$(python -c "import json; print(json.loads('''$RESP''').get('access_token',''))")
+          if [ -z "$TOKEN" ]; then
+            echo "Failed to get token"; docker logs --tail=200 collector-keycloak || true; exit 1
           fi
-
           echo "TOKEN=$TOKEN" >> $GITHUB_ENV
 
-      - name: OWASP ZAP baseline scan (secured endpoints)
+      - name: OWASP ZAP baseline scan
         uses: zaproxy/action-baseline@v0.15.0
         env:
           ZAP_AUTH_HEADER: Authorization
@@ -373,11 +323,9 @@ jobs:
           fail_action: false
           allow_issue_writing: false
 
-
-      - name: Cleanup containers
+      - name: Cleanup
         if: always()
         run: |
-          docker logs collector-api || true
           docker rm -f collector-api collector-keycloak collector-postgres || true
           docker network rm ci-net || true
 
