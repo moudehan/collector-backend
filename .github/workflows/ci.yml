@@ -336,157 +336,157 @@ jobs:
               done
               echo "API not reachable"
               exit 1
+            '
 
   deploy_staging_https_test:
-    name: Deploy staging (HTTPS test) - TEMP
-    runs-on: ubuntu-latest
-    needs: deploy_staging_k8s
-    env:
-      K8S_NAMESPACE: staging
-      HOST: api.staging.local
+      name: Deploy staging (HTTPS test) - TEMP
+      runs-on: ubuntu-latest
+      needs: deploy_staging_k8s
+      env:
+        K8S_NAMESPACE: staging
+        HOST: api.staging.local
 
-    steps:
-      - uses: actions/checkout@v4
+      steps:
+        - uses: actions/checkout@v4
 
-      - name: Create kind cluster
-        uses: helm/kind-action@v1.10.0
-        with:
-          cluster_name: staging
+        - name: Create kind cluster
+          uses: helm/kind-action@v1.10.0
+          with:
+            cluster_name: staging
 
-      # ✅ FIX KIND : indispensable pour ingress-nginx "provider/kind"
-      - name: Label kind node for ingress-nginx
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl get nodes -o wide
-          NODE=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
-          kubectl label node "$NODE" ingress-ready=true --overwrite
-          echo "Labeled node: $NODE with ingress-ready=true"
+        # ✅ FIX KIND : indispensable pour ingress-nginx "provider/kind"
+        - name: Label kind node for ingress-nginx
+          shell: bash
+          run: |
+            set -euo pipefail
+            kubectl get nodes -o wide
+            NODE=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+            kubectl label node "$NODE" ingress-ready=true --overwrite
+            echo "Labeled node: $NODE with ingress-ready=true"
 
-      - name: Ensure namespace exists
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+        - name: Ensure namespace exists
+          shell: bash
+          run: |
+            set -euo pipefail
+            kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Build + Load + Deploy app
-        shell: bash
-        run: |
-          set -euo pipefail
+        - name: Build + Load + Deploy app
+          shell: bash
+          run: |
+            set -euo pipefail
 
-          DOCKER_BUILDKIT=1 docker build --progress=plain -t collector-api:ci .
-          kind load docker-image collector-api:ci --name staging
+            DOCKER_BUILDKIT=1 docker build --progress=plain -t collector-api:ci .
+            kind load docker-image collector-api:ci --name staging
 
-          kubectl apply -f k8s/staging.yaml
+            kubectl apply -f k8s/staging.yaml
 
-          # Postgres peut être plus lent, on ne bloque pas dessus si tu veux juste tester HTTPS sur l'API
-          kubectl -n "${K8S_NAMESPACE}" rollout status deploy/postgres --timeout=300s || true
-          kubectl -n "${K8S_NAMESPACE}" rollout status deploy/api --timeout=300s
+            # Postgres peut être plus lent, on ne bloque pas dessus si tu veux juste tester HTTPS sur l'API
+            kubectl -n "${K8S_NAMESPACE}" rollout status deploy/postgres --timeout=300s || true
+            kubectl -n "${K8S_NAMESPACE}" rollout status deploy/api --timeout=300s
 
-          kubectl -n "${K8S_NAMESPACE}" get pods,svc -o wide
+            kubectl -n "${K8S_NAMESPACE}" get pods,svc -o wide
 
-      - name: Install Ingress NGINX (Kind)
-        shell: bash
-        run: |
-          set -euo pipefail
+        - name: Install Ingress NGINX (Kind)
+          shell: bash
+          run: |
+            set -euo pipefail
 
-          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/kind/deploy.yaml
+            kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/kind/deploy.yaml
 
-          echo "Waiting admission jobs..."
-          kubectl -n ingress-nginx wait --for=condition=complete job/ingress-nginx-admission-create --timeout=300s || true
-          kubectl -n ingress-nginx wait --for=condition=complete job/ingress-nginx-admission-patch --timeout=300s || true
+            echo "Waiting admission jobs..."
+            kubectl -n ingress-nginx wait --for=condition=complete job/ingress-nginx-admission-create --timeout=300s || true
+            kubectl -n ingress-nginx wait --for=condition=complete job/ingress-nginx-admission-patch --timeout=300s || true
 
-          echo "Waiting controller rollout..."
-          kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=420s
+            echo "Waiting controller rollout..."
+            kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=420s
 
-          kubectl -n ingress-nginx get pods,svc -o wide
+            kubectl -n ingress-nginx get pods,svc -o wide
 
-      - name: Create self-signed TLS cert (TEMP)
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y openssl
+        - name: Create self-signed TLS cert (TEMP)
+          shell: bash
+          run: |
+            set -euo pipefail
+            sudo apt-get update
+            sudo apt-get install -y openssl
 
-          openssl req -x509 -nodes -days 2 -newkey rsa:2048 \
-            -keyout tls.key -out tls.crt \
-            -subj "/CN=${HOST}/O=collector"
+            openssl req -x509 -nodes -days 2 -newkey rsa:2048 \
+              -keyout tls.key -out tls.crt \
+              -subj "/CN=${HOST}/O=collector"
 
-          kubectl -n "${K8S_NAMESPACE}" delete secret api-tls --ignore-not-found
-          kubectl -n "${K8S_NAMESPACE}" create secret tls api-tls --cert=tls.crt --key=tls.key
+            kubectl -n "${K8S_NAMESPACE}" delete secret api-tls --ignore-not-found
+            kubectl -n "${K8S_NAMESPACE}" create secret tls api-tls --cert=tls.crt --key=tls.key
 
-      - name: Apply HTTPS Ingress (TEMP)
-        shell: bash
-        run: |
-          set -euo pipefail
+        - name: Apply HTTPS Ingress (TEMP)
+          shell: bash
+          run: |
+            set -euo pipefail
 
-          cat <<EOF | kubectl apply -f -
-          apiVersion: networking.k8s.io/v1
-          kind: Ingress
-          metadata:
-            name: api-https
-            namespace: ${K8S_NAMESPACE}
-            annotations:
-              nginx.ingress.kubernetes.io/ssl-redirect: "true"
-          spec:
-            ingressClassName: nginx
-            tls:
-              - hosts:
-                  - ${HOST}
-                secretName: api-tls
-            rules:
-              - host: ${HOST}
-                http:
-                  paths:
-                    - path: /
-                      pathType: Prefix
-                      backend:
-                        service:
-                          name: api
-                          port:
-                            number: 4000
-          EOF
+            cat <<EOF | kubectl apply -f -
+            apiVersion: networking.k8s.io/v1
+            kind: Ingress
+            metadata:
+              name: api-https
+              namespace: ${K8S_NAMESPACE}
+              annotations:
+                nginx.ingress.kubernetes.io/ssl-redirect: "true"
+            spec:
+              ingressClassName: nginx
+              tls:
+                - hosts:
+                    - ${HOST}
+                  secretName: api-tls
+              rules:
+                - host: ${HOST}
+                  http:
+                    paths:
+                      - path: /
+                        pathType: Prefix
+                        backend:
+                          service:
+                            name: api
+                            port:
+                              number: 4000
+            EOF
 
-          kubectl -n "${K8S_NAMESPACE}" get ing api-https -o wide
+            kubectl -n "${K8S_NAMESPACE}" get ing api-https -o wide
 
-      - name: HTTPS smoke test (via port-forward) - TEMP
-        shell: bash
-        run: |
-          set -euo pipefail
+        - name: HTTPS smoke test (via port-forward) - TEMP
+          shell: bash
+          run: |
+            set -euo pipefail
 
-          cleanup() { kill "${PF_PID:-}" >/dev/null 2>&1 || true; }
-          trap cleanup EXIT
+            cleanup() { kill "${PF_PID:-}" >/dev/null 2>&1 || true; }
+            trap cleanup EXIT
 
-          kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8443:443 >/tmp/pf.log 2>&1 &
-          PF_PID=$!
-          sleep 5
+            kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8443:443 >/tmp/pf.log 2>&1 &
+            PF_PID=$!
+            sleep 5
 
-          echo "Testing HTTPS on https://127.0.0.1:8443 with Host=${HOST}"
+            echo "Testing HTTPS on https://127.0.0.1:8443 with Host=${HOST}"
 
-          # on accepte plusieurs codes selon ta config (endpoint public / protégé / redirection)
-          ok_codes="200 204 301 302 401 403"
+            # on accepte plusieurs codes selon ta config (endpoint public / protégé / redirection)
+            ok_codes="200 204 301 302 401 403"
 
-          for i in $(seq 1 30); do
-            code=$(curl -k -s -o /dev/null -w "%{http_code}" \
-              "https://127.0.0.1:8443/articles" -H "Host: ${HOST}" || true)
+            for i in $(seq 1 30); do
+              code=$(curl -k -s -o /dev/null -w "%{http_code}" \
+                "https://127.0.0.1:8443/articles" -H "Host: ${HOST}" || true)
 
-            echo "try $i => HTTPS $code"
-            if echo "$ok_codes" | grep -qw "$code"; then
-              echo "HTTPS reachable (HTTP $code)"
-              exit 0
-            fi
-            sleep 2
-          done
+              echo "try $i => HTTPS $code"
+              if echo "$ok_codes" | grep -qw "$code"; then
+                echo "HTTPS reachable (HTTP $code)"
+                exit 0
+              fi
+              sleep 2
+            done
 
-          echo "HTTPS not reachable"
-          echo "==== Port-forward logs ===="
-          tail -200 /tmp/pf.log || true
-          echo "==== Debug ingress-nginx ===="
-          kubectl -n ingress-nginx get pods,svc -o wide || true
-          kubectl -n ingress-nginx logs deploy/ingress-nginx-controller --tail=200 || true
-          echo "==== Debug app ===="
-          kubectl -n "${K8S_NAMESPACE}" get pods,svc,ing -o wide || true
-          kubectl -n "${K8S_NAMESPACE}" describe ing api-https || true
-          kubectl -n "${K8S_NAMESPACE}" logs deploy/api --tail=200 || true
-          exit 1
-
+            echo "HTTPS not reachable"
+            echo "==== Port-forward logs ===="
+            tail -200 /tmp/pf.log || true
+            echo "==== Debug ingress-nginx ===="
+            kubectl -n ingress-nginx get pods,svc -o wide || true
+            kubectl -n ingress-nginx logs deploy/ingress-nginx-controller --tail=200 || true
+            echo "==== Debug app ===="
+            kubectl -n "${K8S_NAMESPACE}" get pods,svc,ing -o wide || true
+            kubectl -n "${K8S_NAMESPACE}" describe ing api-https || true
+            kubectl -n "${K8S_NAMESPACE}" logs deploy/api --tail=200 || true
+            exit 1
