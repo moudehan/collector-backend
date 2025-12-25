@@ -58,34 +58,35 @@ spec:
       labels:
         app: api
     spec:
-      containers:
-        - name: api
-          image: collector-api:ci
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 4000
-          env:
-            - name: PORT
-              value: "4000"
-            - name: DB_HOST
-              value: postgres
-            - name: DB_PORT
-              value: "5432"
-            - name: DB_USER
-              value: collector_user
-            - name: DB_PASSWORD
-              value: collector_password
-            - name: DB_NAME
-              value: collector_db
-            - name: KEYCLOAK_ISSUER
-              value: "http://dummy/realms/collector"
-            - name: KEYCLOAK_JWKS_URI
-              value: "http://dummy/realms/collector/protocol/openid-connect/certs"
-            - name: KEYCLOAK_AUDIENCE
-              value: "collector-frontend"
-            - name: STRIPE_SECRET_KEY
-              value: "sk_test_dummy"
-
+     containers:
+      - name: api
+        image: collector-api:ci
+        imagePullPolicy: IfNotPresent
+        command: ["node"]
+        args: ["dist/src/main.js"]
+        ports:
+          - containerPort: 4000
+        env:
+          - name: PORT
+            value: "4000"
+          - name: DB_HOST
+            value: postgres
+          - name: DB_PORT
+            value: "5432"
+          - name: DB_USER
+            value: collector_user
+          - name: DB_PASSWORD
+            value: collector_password
+          - name: DB_NAME
+            value: collector_db
+          - name: KEYCLOAK_ISSUER
+            value: "http://dummy/realms/collector"
+          - name: KEYCLOAK_JWKS_URI
+            value: "http://dummy/realms/collector/protocol/openid-connect/certs"
+          - name: KEYCLOAK_AUDIENCE
+            value: "collector-frontend"
+          - name: STRIPE_SECRET_KEY
+            value: "sk_test_dummy"
 
 ---
 apiVersion: v1
