@@ -7,142 +7,134 @@ on:
     branches: ['master']
 
 jobs:
-  # quality_and_build:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
+  quality_and_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  #     - name: Use Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '22'
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
-  #     - name: Install dependencies
-  #       run: npm ci
-
-
-  #     - name: Lint
-  #       run: npm run lint
-
-  #     - name: Type check
-  #       run: npx tsc --noEmit
-
-  # tests:
-  #   runs-on: ubuntu-latest
-  #   needs: quality_and_build
-
-  #   services:
-  #     postgres:
-  #       image: postgres:16
-  #       env:
-  #         POSTGRES_USER: collector_test
-  #         POSTGRES_PASSWORD: collector_test
-  #         POSTGRES_DB: collector_test_db
-  #       ports:
-  #         - 5432:5432
-  #       options: >-
-  #         --health-cmd="pg_isready -U collector_test -d collector_test_db"
-  #         --health-interval=10s
-  #         --health-timeout=5s
-  #         --health-retries=10
-
-  #   env:
-  #     KEYCLOAK_ISSUER: http://localhost:8081/realms/collector
-  #     KEYCLOAK_CLIENT_ID: collector-api
-  #     KEYCLOAK_CLIENT_SECRET: dummy-secret
-
-  #     DB_HOST: 127.0.0.1
-  #     DB_PORT: "5432"
-  #     DB_USER: collector_test
-  #     DB_PASSWORD: collector_test
-  #     DB_NAME: collector_test_db
-
-  #     NODE_ENV: test
-
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-
-  #     - name: Use Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: "22"
-
-  #     - name: Install dependencies
-  #       run: npm ci
-
-  #     - name: Wait for Postgres
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y postgresql-client
-  #         for i in {1..30}; do
-  #           pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" && exit 0
-  #           echo "Postgres not ready yet... ($i/30)"
-  #           sleep 2
-  #         done
-  #         echo "Postgres did not become ready in time" && exit 1
-
-  #     - name: Unit tests
-  #       run: npm test
-
-  #     - name: E2E API tests
-  #       run: npm run test:e2e
-
-  # security:
-  #   runs-on: ubuntu-latest
-  #   needs: tests
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
-
-  #     - name: Use Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: "22"
-
-  #     - name: Install dependencies
-  #       run: npm ci
-
-  #     - name: Tests with coverage
-  #       run: npm run test:cov
-
-  #     - name: SonarQube Cloud Scan
-  #       uses: SonarSource/sonarqube-scan-action@v7
-  #       env:
-  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-  # build_and_docker:
-  #   runs-on: ubuntu-latest
-  #   needs: security
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-
-  #     - name: Use Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '22'
-
-  #     - name: Install dependencies
-  #       run: npm ci
-
-  #     - name: Build app
-  #       run: npm run build
-
-  #     - name: Build Docker image
-  #       run: |
-  #         docker build -t ghcr.io/${{ github.repository_owner }}/collector-api:${{ github.sha }} .
-  #         # docker push ghcr.io/${{ github.repository_owner }}/collector-api:${{ github.sha }}
+      - name: Install dependencies
+        run: npm ci
 
 
+      - name: Lint
+        run: npm run lint
 
+      - name: Type check
+        run: npx tsc --noEmit
 
+  tests:
+    runs-on: ubuntu-latest
+    needs: quality_and_build
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: collector_test
+          POSTGRES_PASSWORD: collector_test
+          POSTGRES_DB: collector_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U collector_test -d collector_test_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
+    env:
+      KEYCLOAK_ISSUER: http://localhost:8081/realms/collector
+      KEYCLOAK_CLIENT_ID: collector-api
+      KEYCLOAK_CLIENT_SECRET: dummy-secret
 
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_USER: collector_test
+      DB_PASSWORD: collector_test
+      DB_NAME: collector_test_db
+
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for Postgres
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          for i in {1..30}; do
+            pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" && exit 0
+            echo "Postgres not ready yet... ($i/30)"
+            sleep 2
+          done
+          echo "Postgres did not become ready in time" && exit 1
+
+      - name: Unit tests
+        run: npm test
+
+      - name: E2E API tests
+        run: npm run test:e2e
+
+  security:
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Tests with coverage
+        run: npm run test:cov
+
+      - name: SonarQube Cloud Scan
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  build_and_docker:
+    runs-on: ubuntu-latest
+    needs: security
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Build Docker image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/collector-api:${{ github.sha }} .
 
   # charge_test:
   #   runs-on: ubuntu-latest
@@ -294,57 +286,57 @@ jobs:
   #         cmd_options: '-a'
   #         fail_action: false
 
-  # deploy_staging_k8s:
-  #   runs-on: ubuntu-latest
-  #   needs: build_and_docker
+  deploy_staging_k8s:
+    runs-on: ubuntu-latest
+    needs: build_and_docker
 
-  #   steps:
-  #     - uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-  #     - name: Create kind cluster
-  #       uses: helm/kind-action@v1.10.0
-  #       with:
-  #         cluster_name: staging
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: staging
 
-  #     - name: Build Docker image
-  #       run: |
-  #         docker build -t collector-api:ci .
+      - name: Build Docker image
+        run: |
+          docker build -t collector-api:ci .
 
-  #     - name: Load image into kind
-  #       run: |
-  #         kind load docker-image collector-api:ci --name staging
+      - name: Load image into kind
+        run: |
+          kind load docker-image collector-api:ci --name staging
 
-  #     - name: Deploy to Kubernetes (staging)
-  #       shell: bash
-  #       run: |
-  #         set -e
-  #         kubectl apply -f k8s/staging.yaml
+      - name: Deploy to Kubernetes (staging)
+        shell: bash
+        run: |
+          set -e
+          kubectl apply -f k8s/staging.yaml
 
-  #         kubectl -n staging rollout status deploy/postgres --timeout=180s
-  #         kubectl -n staging rollout status deploy/api --timeout=180s
+          kubectl -n staging rollout status deploy/postgres --timeout=180s
+          kubectl -n staging rollout status deploy/api --timeout=180s
 
-  #         kubectl -n staging wait --for=condition=Ready pod -l app=postgres --timeout=180s
-  #         kubectl -n staging wait --for=condition=Ready pod -l app=api --timeout=180s
+          kubectl -n staging wait --for=condition=Ready pod -l app=postgres --timeout=180s
+          kubectl -n staging wait --for=condition=Ready pod -l app=api --timeout=180s
 
-  #     - name: Smoke test API (inside cluster, no port-forward)
-  #       shell: bash
-  #       run: |
-  #         set -e
-  #         kubectl -n staging run curltest --rm -i --restart=Never \
-  #           --image=curlimages/curl:8.5.0 \
-  #           --command -- sh -lc '
-  #             for i in $(seq 1 20); do
-  #               code=$(curl -s -o /dev/null -w "%{http_code}" http://api:4000/articles || true)
-  #               echo "try $i => HTTP $code"
-  #               if [ "$code" != "000" ]; then
-  #                 echo "API reachable (HTTP $code)"
-  #                 exit 0
-  #               fi
-  #               sleep 2
-  #             done
-  #             echo "API not reachable"
-  #             exit 1
-  #           '
+      - name: Smoke test API (inside cluster, no port-forward)
+        shell: bash
+        run: |
+          set -e
+          kubectl -n staging run curltest --rm -i --restart=Never \
+            --image=curlimages/curl:8.5.0 \
+            --command -- sh -lc '
+              for i in $(seq 1 20); do
+                code=$(curl -s -o /dev/null -w "%{http_code}" http://api:4000/articles || true)
+                echo "try $i => HTTP $code"
+                if [ "$code" != "000" ]; then
+                  echo "API reachable (HTTP $code)"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "API not reachable"
+              exit 1
+            '
   deploy_staging_https_test:
     name: Deploy staging (HTTPS test) - TEMP
     runs-on: ubuntu-latest
