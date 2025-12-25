@@ -318,7 +318,7 @@ jobs:
         run: |
           kubectl -n staging port-forward svc/api 4000:4000 >/tmp/pf.log 2>&1 &
           sleep 3
-          curl -sSf http://localhost:4000/health
+          curl -sSf http://localhost:4000/
 
 
     # deploy_prod:
