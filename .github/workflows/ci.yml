@@ -341,6 +341,9 @@ jobs:
     name: Deploy staging (HTTPS test) - TEMP
     runs-on: ubuntu-latest
     needs: deploy_staging_k8s
+    env:
+      K8S_NAMESPACE: staging
+      HOST: api.staging.local
     steps:
       - uses: actions/checkout@v4
 
@@ -349,60 +352,71 @@ jobs:
         with:
           cluster_name: staging
 
-      - name: Build + Load + Deploy app
+      - name: Ensure namespace exists
         shell: bash
         run: |
           set -e
-          docker build -t collector-api:ci .
+          kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Build + Load + Deploy app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Logs Docker complets (utile si ça bloque)
+          DOCKER_BUILDKIT=1 docker build --progress=plain -t collector-api:ci .
+
           kind load docker-image collector-api:ci --name staging
+
           kubectl apply -f k8s/staging.yaml
-          kubectl -n ${{ env.K8S_NAMESPACE }} rollout status deploy/api --timeout=180s
-          kubectl -n ${{ env.K8S_NAMESPACE }} wait --for=condition=Ready pod -l app=api --timeout=180s
+
+          kubectl -n "${K8S_NAMESPACE}" rollout status deploy/postgres --timeout=240s || true
+          kubectl -n "${K8S_NAMESPACE}" rollout status deploy/api --timeout=240s
+
+          kubectl -n "${K8S_NAMESPACE}" get pods,svc
 
       - name: Install Ingress NGINX (Kind)
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/kind/deploy.yaml
-          kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=240s
+          kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=300s
+          kubectl -n ingress-nginx get svc ingress-nginx-controller
 
       - name: Create self-signed TLS cert (TEMP)
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y openssl
-
-          # CN/Host utilisé par l’Ingress
-          HOST=api.staging.local
 
           openssl req -x509 -nodes -days 2 -newkey rsa:2048 \
             -keyout tls.key -out tls.crt \
             -subj "/CN=${HOST}/O=collector"
 
-          kubectl -n ${{ env.K8S_NAMESPACE }} delete secret api-tls --ignore-not-found
-          kubectl -n ${{ env.K8S_NAMESPACE }} create secret tls api-tls --cert=tls.crt --key=tls.key
+          kubectl -n "${K8S_NAMESPACE}" delete secret api-tls --ignore-not-found
+          kubectl -n "${K8S_NAMESPACE}" create secret tls api-tls --cert=tls.crt --key=tls.key
 
       - name: Apply HTTPS Ingress (TEMP)
         shell: bash
         run: |
-          set -e
-          cat <<'EOF' | kubectl apply -f -
+          set -euo pipefail
+          cat <<EOF | kubectl apply -f -
           apiVersion: networking.k8s.io/v1
           kind: Ingress
           metadata:
             name: api-https
-            namespace: staging
+            namespace: ${K8S_NAMESPACE}
             annotations:
               nginx.ingress.kubernetes.io/ssl-redirect: "true"
           spec:
             ingressClassName: nginx
             tls:
               - hosts:
-                  - api.staging.local
+                  - ${HOST}
                 secretName: api-tls
             rules:
-              - host: api.staging.local
+              - host: ${HOST}
                 http:
                   paths:
                     - path: /
@@ -414,28 +428,44 @@ jobs:
                             number: 4000
           EOF
 
+          kubectl -n "${K8S_NAMESPACE}" get ing api-https -o yaml
+
       - name: HTTPS smoke test (via port-forward) - TEMP
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          # Port-forward sur le contrôleur ingress en 8443 local
+          # Toujours tuer le port-forward
+          cleanup() { kill "${PF_PID}" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+
           kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8443:443 >/tmp/pf.log 2>&1 &
           PF_PID=$!
-          sleep 3
+          sleep 5
 
-          # Test HTTPS (cert auto-signé => -k) + Host header
-          for i in $(seq 1 20); do
-            code=$(curl -k -s -o /dev/null -w "%{http_code}" https://127.0.0.1:8443/articles -H "Host: api.staging.local" || true)
+          echo "Testing HTTPS on https://127.0.0.1:8443 with Host=${HOST}"
+
+          # IMPORTANT : on accepte comme "OK" : 200, 204, 301, 302, 401, 403
+          # (selon si endpoint protégé / redirection / etc.)
+          ok_codes="200 204 301 302 401 403"
+
+          for i in $(seq 1 30); do
+            code=$(curl -k -s -o /dev/null -w "%{http_code}" \
+              "https://127.0.0.1:8443/articles" -H "Host: ${HOST}" || true)
+
             echo "try $i => HTTPS $code"
-            if [ "$code" != "000" ] && [ "$code" != "404" ]; then
+            if echo "$ok_codes" | grep -qw "$code"; then
               echo "HTTPS reachable (HTTP $code)"
-              kill $PF_PID || true
               exit 0
             fi
             sleep 2
           done
 
           echo "HTTPS not reachable"
-          kill $PF_PID || true
+          echo "==== Port-forward logs ===="
+          tail -200 /tmp/pf.log || true
+          echo "==== Debug k8s ===="
+          kubectl -n "${K8S_NAMESPACE}" get pods,svc,ing || true
+          kubectl -n "${K8S_NAMESPACE}" describe ing api-https || true
+          kubectl -n ingress-nginx logs deploy/ingress-nginx-controller --tail=200 || true
           exit 1
