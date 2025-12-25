@@ -314,20 +314,19 @@ jobs:
           kubectl -n staging rollout status deploy/postgres --timeout=120s
           kubectl -n staging rollout status deploy/api --timeout=120s
 
-      - name: Smoke test API (accept 404/401/etc)
+      - name: Smoke test API (inside cluster)
+        shell: bash
         run: |
-          kubectl -n staging port-forward svc/api 4000:4000 >/tmp/pf.log 2>&1 &
-          for i in {1..20}; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/ || true)
-            echo "try $i => HTTP $code"
-            if [ "$code" != "000" ]; then
-              echo "API reachable with HTTP $code"
-              exit 0
-            fi
-            sleep 2
-          done
-          cat /tmp/pf.log || true
-          exit 1
+          kubectl -n staging get pods -l app=api -o wide
+          kubectl -n staging wait --for=condition=Ready pod -l app=api --timeout=180s
+
+          kubectl -n staging run curltest --rm -i --restart=Never \
+            --image=curlimages/curl:8.5.0 \
+            --command -- sh -lc '
+              code=$(curl -s -o /dev/null -w "%{http_code}" http://api:4000/ || true);
+              echo "HTTP=$code";
+              [ "$code" != "000" ]
+           '
 
 
     # deploy_prod:
