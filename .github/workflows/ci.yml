@@ -319,7 +319,7 @@ jobs:
               -e KEYCLOAK_ISSUER=${KEYCLOAK_ISSUER} \
               -e KEYCLOAK_JWKS_URI=${KEYCLOAK_ISSUER}/protocol/openid-connect/certs \
               -e KEYCLOAK_AUDIENCE=${KEYCLOAK_CLIENT_ID} \
-              -e STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }} \
+              -e STRIPE_SECRET_KEY=sk_test_dummy \
               collector-api:${{ github.sha }}
 
         - name: Wait for API to be up (with logs on failure)
