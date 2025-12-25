@@ -322,28 +322,26 @@ jobs:
               -e STRIPE_SECRET_KEY=sk_test_dummy \
               collector-api:${{ github.sha }}
 
-        - name: Wait for API to be up (with logs on failure)
+        - name: Wait for API to be up
           run: |
             set +e
-            for i in {1..30}; do
-              if curl -fsS ${API_BASE_URL}/health >/dev/null 2>&1; then
-                echo "API is up"
+            for i in {1..10}; do
+              CODE=$(curl -s -o /dev/null -w "%{http_code}" ${API_BASE_URL}/articles)
+              if echo "$CODE" | grep -Eq "^(200|401|403)$"; then
+                echo "API is up (HTTP $CODE)"
                 exit 0
               fi
-              echo "API not ready yet... (try $i/30)"
-              docker logs --tail=80 collector-api || true
+              echo "API not ready yet... (try $i/10) HTTP=$CODE"
               sleep 3
             done
-
             echo "API never became ready"
-            docker ps -a || true
-            docker logs collector-api || true
+            docker logs --tail=200 collector-api || true
             exit 1
 
-        - name: Install jq
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y jq
+                - name: Install jq
+                  run: |
+                    sudo apt-get update
+                    sudo apt-get install -y jq
 
         - name: Get Keycloak token for ZAP (client_credentials)
           run: |
