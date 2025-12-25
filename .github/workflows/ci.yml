@@ -287,7 +287,6 @@ jobs:
   #         cmd_options: '-a'
   #         fail_action: false
 
-
   deploy_staging_k8s:
     runs-on: ubuntu-latest
     needs: build_and_docker
@@ -309,24 +308,63 @@ jobs:
           kind load docker-image collector-api:ci --name staging
 
       - name: Deploy to Kubernetes (staging)
-        run: |
-          kubectl apply -f k8s/staging.yaml
-          kubectl -n staging rollout status deploy/postgres --timeout=120s
-          kubectl -n staging rollout status deploy/api --timeout=120s
-
-      - name: Smoke test API (inside cluster)
         shell: bash
         run: |
-          kubectl -n staging get pods -l app=api -o wide
+          set -e
+          kubectl apply -f k8s/staging.yaml
+
+          # attendre postgres + api (rollout)
+          kubectl -n staging rollout status deploy/postgres --timeout=180s
+          kubectl -n staging rollout status deploy/api --timeout=180s
+
+          # attendre que les pods soient READY (important)
+          kubectl -n staging wait --for=condition=Ready pod -l app=postgres --timeout=180s
           kubectl -n staging wait --for=condition=Ready pod -l app=api --timeout=180s
 
+      - name: Smoke test API (inside cluster, no port-forward)
+        shell: bash
+        run: |
+          set -e
+
+          # curl depuis un pod dans le cluster => beaucoup plus fiable que port-forward en CI
           kubectl -n staging run curltest --rm -i --restart=Never \
             --image=curlimages/curl:8.5.0 \
             --command -- sh -lc '
-              code=$(curl -s -o /dev/null -w "%{http_code}" http://api:4000/ || true);
-              echo "HTTP=$code";
-              [ "$code" != "000" ]
-           '
+              for i in $(seq 1 20); do
+                code=$(curl -s -o /dev/null -w "%{http_code}" http://api:4000/ || true)
+                echo "try $i => HTTP $code"
+                if [ "$code" != "000" ]; then
+                  echo "API reachable ✅ (HTTP $code)"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "API not reachable ❌"
+              exit 1
+            '
+
+      - name: Debug (only if failure)
+        if: failure()
+        shell: bash
+        run: |
+          echo "=== PODS ==="
+          kubectl -n staging get pods -o wide || true
+
+          echo "=== SERVICES ==="
+          kubectl -n staging get svc -o wide || true
+
+          echo "=== ENDPOINTS ==="
+          kubectl -n staging get endpoints api -o yaml || true
+
+          echo "=== DESCRIBE API POD ==="
+          kubectl -n staging describe pod -l app=api || true
+
+          echo "=== API LOGS ==="
+          kubectl -n staging logs deploy/api --tail=200 || true
+
+          echo "=== POSTGRES LOGS ==="
+          kubectl -n staging logs deploy/postgres --tail=200 || true
+
 
 
     # deploy_prod:
