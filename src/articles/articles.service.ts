@@ -114,6 +114,22 @@ export class ArticlesService {
       await this.imgRepo.save(imageEntities);
     }
 
+    const price = Number(dto.price);
+    const shippingCost = Number(dto.shipping_cost);
+    const hasImages = Array.isArray(images) && images.length > 0;
+
+    const canAutoApprove =
+      price > 0 && shippingCost >= 0 && quantity > 0 && hasImages;
+
+    if (canAutoApprove) {
+      try {
+        await this.fraudService.checkPriceAnomaly(savedArticle.id, price);
+        await this.approve(savedArticle.id);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
     return this.repo.findOne({
       where: { id: savedArticle.id },
       relations: ['images', 'category', 'shop'],
