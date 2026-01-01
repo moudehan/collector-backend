@@ -13,6 +13,7 @@ export enum NotificationType {
   SYSTEM = 'SYSTEM',
   ARTICLE_UPDATED = 'ARTICLE_UPDATED',
   MAIL_ENABLED = 'MAIL_ENABLED',
+  ARTICLE_REJECTED = 'ARTICLE_REJECTED',
 }
 
 @Entity()

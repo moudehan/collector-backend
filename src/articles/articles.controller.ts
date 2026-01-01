@@ -26,6 +26,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { UpdateArticleDto } from 'src/articles/dto/update-article.dto';
 import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
+import { RejectArticleDto } from 'src/articles/dto/reject-article.dto';
 
 @Controller('articles')
 export class ArticlesController {
@@ -103,8 +104,8 @@ export class ArticlesController {
   @UseGuards(KeycloakAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Patch(':id/reject')
-  reject(@Param('id') id: string) {
-    return this.service.reject(id);
+  reject(@Param('id') id: string, @Body() dto: RejectArticleDto) {
+    return this.service.reject(id, dto.reason);
   }
 
   @UseGuards(KeycloakAuthGuard)

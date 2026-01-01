@@ -100,6 +100,15 @@ export class Article {
   @Column({ type: 'text', nullable: true })
   vintageNotes: string | null;
 
+  @Column({ type: 'simple-json', nullable: true })
+  moderation_reasons?: string[] | null;
+
+  @Column({ type: 'text', nullable: true })
+  rejection_reason?: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  rejected_at?: Date | null;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
 

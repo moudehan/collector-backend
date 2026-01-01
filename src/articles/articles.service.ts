@@ -41,6 +41,92 @@ export class ArticlesService {
     private readonly articleRatingRepo: Repository<ArticleRating>,
   ) {}
 
+  private computeModerationReasons(input: {
+    title?: string | null;
+    description?: string | null;
+    price: number;
+    shipping_cost: number;
+    quantity: number;
+    imagesCount: number;
+    productionYear?: number | null;
+  }) {
+    const reasons: string[] = [];
+
+    const price = Number(input.price);
+    const shipping = Number(input.shipping_cost);
+    const quantity = Number(input.quantity);
+    const imagesCount = Number(input.imagesCount);
+
+    const MAX_SHIPPING_COST = 100;
+    const MAX_PRICE = 100000; // 100k
+    const MIN_TITLE_LEN = 5;
+    const MAX_TITLE_LEN = 120;
+    const MIN_DESC_LEN = 20;
+    const MAX_DESC_LEN = 2500;
+    const MAX_IMAGES = 10;
+    const MIN_YEAR = 1900;
+    const MAX_YEAR = new Date().getFullYear() + 1;
+
+    if (!Number.isFinite(price)) reasons.push('Prix invalide (non numérique).');
+    else {
+      if (price <= 0) reasons.push('Prix invalide (doit être > 0).');
+      if (price > MAX_PRICE)
+        reasons.push(`Prix trop élevé (doit être ≤ ${MAX_PRICE}).`);
+    }
+
+    if (!Number.isFinite(shipping))
+      reasons.push('Frais de livraison invalides (non numérique).');
+    else {
+      if (shipping < 0)
+        reasons.push('Frais de livraison invalides (doivent être ≥ 0).');
+      if (shipping > MAX_SHIPPING_COST)
+        reasons.push(
+          `Frais de livraison trop élevés (doivent être ≤ ${MAX_SHIPPING_COST}).`,
+        );
+      if (Number.isFinite(price) && price > 0 && shipping > price) {
+        reasons.push('Frais de livraison incohérents (supérieurs au prix).');
+      }
+    }
+
+    if (!Number.isFinite(quantity))
+      reasons.push('Quantité invalide (non numérique).');
+    else {
+      if (quantity <= 0) reasons.push('Quantité invalide (doit être > 0).');
+      if (!Number.isInteger(quantity))
+        reasons.push('Quantité invalide (doit être un entier).');
+      if (quantity > 999) reasons.push('Quantité trop élevée (max 999).');
+    }
+
+    if (imagesCount <= 0) reasons.push('Aucune image ajoutée.');
+    if (imagesCount > MAX_IMAGES)
+      reasons.push(`Trop d’images (max ${MAX_IMAGES}).`);
+
+    const title = (input.title ?? '').trim();
+    if (title.length < MIN_TITLE_LEN)
+      reasons.push(`Titre trop court (min ${MIN_TITLE_LEN} caractères).`);
+    if (title.length > MAX_TITLE_LEN)
+      reasons.push(`Titre trop long (max ${MAX_TITLE_LEN} caractères).`);
+
+    const desc = (input.description ?? '').trim();
+    if (desc.length < MIN_DESC_LEN)
+      reasons.push(`Description trop courte (min ${MIN_DESC_LEN} caractères).`);
+    if (desc.length > MAX_DESC_LEN)
+      reasons.push(`Description trop longue (max ${MAX_DESC_LEN} caractères).`);
+
+    if (input.productionYear !== undefined && input.productionYear !== null) {
+      const y = Number(input.productionYear);
+      if (!Number.isFinite(y)) reasons.push('Année de production invalide.');
+      else if (!Number.isInteger(y))
+        reasons.push('Année de production invalide (entier attendu).');
+      else if (y < MIN_YEAR || y > MAX_YEAR)
+        reasons.push(
+          `Année de production invalide (doit être entre ${MIN_YEAR} et ${MAX_YEAR}).`,
+        );
+    }
+
+    return reasons;
+  }
+
   async create(dto: CreateArticleDto, images: MulterFile[], userId: string) {
     if (!dto.categoryId) {
       throw new BadRequestException({ message: 'categoryId est requis' });
@@ -116,18 +202,36 @@ export class ArticlesService {
 
     const price = Number(dto.price);
     const shippingCost = Number(dto.shipping_cost);
-    const hasImages = Array.isArray(images) && images.length > 0;
+    const hasImages = Array.isArray(images) ? images.length : 0;
 
-    const canAutoApprove =
-      price > 0 && shippingCost >= 0 && quantity > 0 && hasImages;
+    const reasons = this.computeModerationReasons({
+      title: dto.title,
+      description: dto.description,
+      price,
+      shipping_cost: shippingCost,
+      quantity,
+      imagesCount: hasImages,
+      productionYear: dto.productionYear ?? null,
+    });
 
-    if (canAutoApprove) {
+    if (reasons.length === 0) {
       try {
         await this.fraudService.checkPriceAnomaly(savedArticle.id, price);
         await this.approve(savedArticle.id);
-      } catch (error) {
-        console.error(error);
+      } catch (e) {
+        console.error(e);
+        await this.repo.update(savedArticle.id, {
+          status: ArticleStatus.PENDING,
+          moderation_reasons: [
+            'Anomalie de prix détectée : validation manuelle requise.',
+          ],
+        });
       }
+    } else {
+      await this.repo.update(savedArticle.id, {
+        status: ArticleStatus.PENDING,
+        moderation_reasons: reasons,
+      });
     }
 
     return this.repo.findOne({
@@ -276,8 +380,58 @@ export class ArticlesService {
     };
   }
 
-  reject(id: string) {
-    return this.repo.update(id, { status: ArticleStatus.REJECTED });
+  async reject(id: string, reason: string) {
+    if (!reason || reason.trim().length < 5) {
+      throw new BadRequestException('Une raison de rejet est requise.');
+    }
+
+    const article = await this.repo.findOne({
+      where: { id },
+      relations: ['seller'],
+    });
+    if (!article) throw new NotFoundException('Article introuvable.');
+
+    if (article.status === ArticleStatus.APPROVED) {
+      throw new BadRequestException(
+        'Impossible de rejeter un article déjà approuvé.',
+      );
+    }
+
+    article.status = ArticleStatus.REJECTED;
+    article.rejection_reason = reason.trim();
+    article.rejected_at = new Date();
+
+    await this.repo.save(article);
+
+    const savedNotif = await this.notificationsService.send(
+      article.seller.id,
+      NotificationType.ARTICLE_REJECTED,
+      {
+        article_id: article.id,
+        title: article.title,
+        reason: article.rejection_reason,
+        message: 'Votre article a été rejeté',
+      },
+    );
+
+    if (savedNotif) {
+      this.articleGateway.emitNewArticleInterest({
+        id: savedNotif.id,
+        type: NotificationType.ARTICLE_REJECTED,
+        title: article.title,
+        message: savedNotif.payload?.message,
+        article_id: article.id,
+        reason: savedNotif.payload?.reason,
+        created_at: savedNotif.created_at,
+        userId: article.seller.id,
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Article rejeté.',
+      reason: article.rejection_reason,
+    };
   }
 
   publicCatalogue(categoryId?: string) {
@@ -471,6 +625,8 @@ export class ArticlesService {
     if (article.seller.id !== userId)
       throw new ForbiddenException('Non autorisé');
 
+    const previousStatus = article.status;
+
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const keptImages: { id: string }[] = dto.oldImages
       ? JSON.parse(dto.oldImages)
@@ -498,11 +654,24 @@ export class ArticlesService {
       await this.imgRepo.save(imageEntities);
     }
 
+    let priceCheckDone = false;
+    let priceCheckFailed = false;
+
     if (
       dto.price !== undefined &&
       Number(dto.price) !== Number(article.price)
     ) {
-      await this.fraudService.checkPriceAnomaly(article.id, Number(dto.price));
+      priceCheckDone = true;
+
+      try {
+        await this.fraudService.checkPriceAnomaly(
+          article.id,
+          Number(dto.price),
+        );
+      } catch (e) {
+        console.error(e);
+        priceCheckFailed = true;
+      }
 
       await this.priceRepo.save({
         article: { id: article.id },
@@ -515,8 +684,9 @@ export class ArticlesService {
 
     if (dto.title !== undefined) article.title = dto.title;
     if (dto.description !== undefined) article.description = dto.description;
-    if (dto.shipping_cost !== undefined)
+    if (dto.shipping_cost !== undefined) {
       article.shipping_cost = Number(dto.shipping_cost);
+    }
 
     if (dto.categoryId) {
       article.category = { id: dto.categoryId } as Category;
@@ -546,11 +716,69 @@ export class ArticlesService {
 
     const updated = await this.repo.findOne({
       where: { id: article.id },
-      relations: ['images', 'category', 'shop'],
+      relations: ['images', 'category', 'shop', 'seller'],
     });
+    if (!updated)
+      throw new NotFoundException('Article introuvable après update');
+
+    const isResubmission =
+      previousStatus === ArticleStatus.REJECTED ||
+      previousStatus === ArticleStatus.PENDING;
+
+    if (isResubmission) {
+      updated.status = ArticleStatus.PENDING;
+
+      updated.rejection_reason = null;
+      updated.rejected_at = null;
+
+      const reasons = this.computeModerationReasons({
+        title: updated.title,
+        description: updated.description,
+        price: Number(updated.price),
+        shipping_cost: Number(updated.shipping_cost),
+        quantity: Number(updated.quantity),
+        imagesCount: Array.isArray(updated.images) ? updated.images.length : 0,
+        productionYear: updated.productionYear ?? null,
+      });
+
+      if (priceCheckFailed) {
+        reasons.push(
+          'Anomalie de prix détectée : validation manuelle requise.',
+        );
+      }
+
+      if (reasons.length > 0) {
+        updated.moderation_reasons = reasons;
+        updated.status = ArticleStatus.PENDING;
+      } else {
+        if (!priceCheckDone) {
+          try {
+            await this.fraudService.checkPriceAnomaly(
+              updated.id,
+              Number(updated.price),
+            );
+          } catch (e) {
+            console.error(e);
+            priceCheckFailed = true;
+          }
+        }
+
+        if (priceCheckFailed) {
+          updated.status = ArticleStatus.PENDING;
+          updated.moderation_reasons = [
+            'Anomalie de prix détectée : validation manuelle requise.',
+          ];
+        } else {
+          updated.status = ArticleStatus.APPROVED;
+          updated.moderation_reasons = null;
+        }
+      }
+
+      await this.repo.save(updated);
+    }
 
     const followers = await this.likeRepo.find({
-      where: { article: { id: article.id } },
+      where: { article: { id: updated.id } },
       relations: ['user'],
     });
 
@@ -561,8 +789,8 @@ export class ArticlesService {
         f.user.id,
         NotificationType.ARTICLE_UPDATED,
         {
-          article_id: article.id,
-          title: article.title,
+          article_id: updated.id,
+          title: updated.title,
           message: 'Un article que vous suivez a été modifié',
         },
         userId,
@@ -572,16 +800,19 @@ export class ArticlesService {
         this.articleGateway.emitNewArticleInterest({
           id: savedNotif.id,
           type: NotificationType.ARTICLE_UPDATED,
-          title: article.title,
+          title: updated.title,
           message: savedNotif.payload?.message,
-          article_id: article.id,
+          article_id: updated.id,
           created_at: savedNotif.created_at,
           userId: f.user.id,
         });
       }
     }
 
-    return updated;
+    return this.repo.findOne({
+      where: { id: updated.id },
+      relations: ['images', 'category', 'shop'],
+    });
   }
 
   async getRecommendations(userId: string, userRole: string) {
