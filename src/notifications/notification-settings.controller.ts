@@ -5,9 +5,10 @@ import { UpdateNotificationSettingsDto } from './dto/update-notification-setting
 import { NotificationSettingsService } from './notification-settings.service';
 
 type JwtUserPayload = {
-  id: string;
-  email: string;
-  role: string;
+  sub: string;
+  id?: string;
+  email?: string;
+  role?: string;
 };
 
 interface AuthenticatedRequest extends Request {
@@ -23,7 +24,7 @@ export class NotificationSettingsController {
 
   @Get()
   getMySettings(@Req() req: AuthenticatedRequest) {
-    return this.notificationSettingsService.getOrCreate(req.user.id);
+    return this.notificationSettingsService.getOrCreate(req.user.sub);
   }
 
   @Patch()
@@ -31,6 +32,6 @@ export class NotificationSettingsController {
     @Req() req: AuthenticatedRequest,
     @Body() body: UpdateNotificationSettingsDto,
   ) {
-    return this.notificationSettingsService.update(req.user.id, body);
+    return this.notificationSettingsService.update(req.user.sub, body);
   }
 }

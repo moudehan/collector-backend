@@ -24,4 +24,10 @@ export class NotificationSettings {
 
   @Column({ default: true })
   MAIL_ENABLED: boolean;
+
+  @Column({ default: true })
+  ARTICLE_REJECTED: boolean;
+
+  @Column({ default: true })
+  ARTICLE_APPROUVED: boolean;
 }

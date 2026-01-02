@@ -16,6 +16,8 @@ export class NotificationSettingsService {
     return {
       NEW_ARTICLE: settings.NEW_ARTICLE,
       ARTICLE_UPDATED: settings.ARTICLE_UPDATED,
+      ARTICLE_REJECTED: settings.ARTICLE_REJECTED,
+      ARTICLE_APPROUVED: settings.ARTICLE_APPROUVED,
       MAIL_ENABLED: settings.MAIL_ENABLED,
     };
   }
@@ -34,6 +36,8 @@ export class NotificationSettingsService {
       user: { id: userId } as User,
       NEW_ARTICLE: true,
       ARTICLE_UPDATED: true,
+      ARTICLE_REJECTED: true,
+      ARTICLE_APPROUVED: true,
       MAIL_ENABLED: true,
     });
     const saved = await this.settingsRepo.save(created);
@@ -51,6 +55,8 @@ export class NotificationSettingsService {
         user: { id: userId } as User,
         NEW_ARTICLE: true,
         ARTICLE_UPDATED: true,
+        ARTICLE_REJECTED: true,
+        ARTICLE_APPROUVED: true,
         MAIL_ENABLED: true,
       });
     }
@@ -61,6 +67,14 @@ export class NotificationSettingsService {
 
     if (payload.ARTICLE_UPDATED !== undefined) {
       settings.ARTICLE_UPDATED = payload.ARTICLE_UPDATED;
+    }
+
+    if (payload.ARTICLE_REJECTED !== undefined) {
+      settings.ARTICLE_REJECTED = payload.ARTICLE_REJECTED;
+    }
+
+    if (payload.ARTICLE_APPROUVED !== undefined) {
+      settings.ARTICLE_APPROUVED = payload.ARTICLE_APPROUVED;
     }
 
     if (payload.MAIL_ENABLED !== undefined) {

@@ -627,14 +627,19 @@ export class ArticlesService {
 
     const previousStatus = article.status;
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const keptImages: { id: string }[] = dto.oldImages
-      ? JSON.parse(dto.oldImages)
-      : [];
+    let keptIds: string[] = [];
+    if (dto.oldImages) {
+      try {
+        const parsed = JSON.parse(dto.oldImages) as Array<{ id?: string }>;
+        if (Array.isArray(parsed)) {
+          keptIds = parsed.map((x) => x?.id).filter((id): id is string => !!id);
+        }
+      } catch {
+        throw new BadRequestException('oldImages invalide (JSON attendu).');
+      }
+    }
 
-    const keptIds = keptImages.map((img) => img.id);
-
-    const imagesToDelete = article.images.filter(
+    const imagesToDelete = (article.images ?? []).filter(
       (img) => !keptIds.includes(img.id),
     );
 
@@ -647,7 +652,7 @@ export class ArticlesService {
         this.imgRepo.create({
           // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
           url: `/uploads/articles/${file.filename}`,
-          article: article,
+          article,
         }),
       );
 
@@ -718,18 +723,20 @@ export class ArticlesService {
       where: { id: article.id },
       relations: ['images', 'category', 'shop', 'seller'],
     });
-    if (!updated)
+    if (!updated) {
       throw new NotFoundException('Article introuvable après update');
+    }
 
-    const isResubmission =
+    const needsModeration =
       previousStatus === ArticleStatus.REJECTED ||
-      previousStatus === ArticleStatus.PENDING;
+      previousStatus === ArticleStatus.PENDING ||
+      previousStatus === ArticleStatus.APPROVED;
 
-    if (isResubmission) {
-      updated.status = ArticleStatus.PENDING;
-
-      updated.rejection_reason = null;
-      updated.rejected_at = null;
+    if (needsModeration) {
+      if (previousStatus === ArticleStatus.REJECTED) {
+        updated.rejection_reason = null;
+        updated.rejected_at = null;
+      }
 
       const reasons = this.computeModerationReasons({
         title: updated.title,
@@ -748,8 +755,8 @@ export class ArticlesService {
       }
 
       if (reasons.length > 0) {
-        updated.moderation_reasons = reasons;
         updated.status = ArticleStatus.PENDING;
+        updated.moderation_reasons = reasons;
       } else {
         if (!priceCheckDone) {
           try {
@@ -775,6 +782,35 @@ export class ArticlesService {
       }
 
       await this.repo.save(updated);
+      if (
+        updated.status !== previousStatus &&
+        updated.status === ArticleStatus.APPROVED
+      ) {
+        const savedNotif = await this.notificationsService.send(
+          updated.seller.id,
+          NotificationType.ARTICLE_APPROUVED,
+          {
+            article_id: updated.id,
+            title: updated.title,
+            message: 'Votre article été approuvé automatiquement.',
+            status: updated.status,
+          },
+          userId,
+        );
+
+        if (savedNotif) {
+          this.articleGateway.emitNewArticleInterest({
+            id: savedNotif.id,
+            type: NotificationType.ARTICLE_APPROUVED,
+            title: updated.title,
+            message: savedNotif.payload?.message,
+            article_id: updated.id,
+            created_at: savedNotif.created_at,
+            userId: updated.seller.id,
+            status: updated.status,
+          });
+        }
+      }
     }
 
     const followers = await this.likeRepo.find({
@@ -796,7 +832,7 @@ export class ArticlesService {
         userId,
       );
 
-      if (savedNotif && f.user.id !== userId) {
+      if (savedNotif) {
         this.articleGateway.emitNewArticleInterest({
           id: savedNotif.id,
           type: NotificationType.ARTICLE_UPDATED,
@@ -811,7 +847,7 @@ export class ArticlesService {
 
     return this.repo.findOne({
       where: { id: updated.id },
-      relations: ['images', 'category', 'shop'],
+      relations: ['images', 'category', 'shop', 'seller'],
     });
   }
 

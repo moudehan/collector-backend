@@ -8,9 +8,7 @@ import {
 import { Server, Socket } from 'socket.io';
 
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  cors: { origin: '*' },
 })
 export class ConversationGateway {
   @WebSocketServer()
@@ -24,7 +22,18 @@ export class ConversationGateway {
     void client.join(data.conversationId);
   }
 
-  emitNewMessage(conversationId: string, message: any) {
+  emitNewMessage(
+    conversationId: string,
+    message: unknown,
+    excludeSocketId?: string,
+  ) {
+    if (excludeSocketId) {
+      this.server
+        .to(conversationId)
+        .except(excludeSocketId)
+        .emit('newMessage', message);
+      return;
+    }
     this.server.to(conversationId).emit('newMessage', message);
   }
 }

@@ -50,6 +50,20 @@ export class NotificationsService {
       return null;
     }
 
+    if (
+      type === NotificationType.ARTICLE_REJECTED &&
+      !settings.ARTICLE_REJECTED
+    ) {
+      return null;
+    }
+
+    if (
+      type === NotificationType.ARTICLE_APPROUVED &&
+      !settings.ARTICLE_APPROUVED
+    ) {
+      return null;
+    }
+
     const notif = this.repo.create({
       user: { id: userId },
       type,

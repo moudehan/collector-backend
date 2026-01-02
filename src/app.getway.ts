@@ -13,9 +13,7 @@ interface ClientMessage {
 }
 
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  cors: { origin: '*' },
 })
 export class AppGateway implements OnGatewayInit {
   @WebSocketServer()
@@ -30,7 +28,7 @@ export class AppGateway implements OnGatewayInit {
     @MessageBody() data: ClientMessage,
     @ConnectedSocket() client: Socket,
   ) {
-    this.server.emit('messageToClient', {
+    client.broadcast.emit('messageToClient', {
       from: client.id,
       message: data.message,
     });

@@ -12,4 +12,12 @@ export class UpdateNotificationSettingsDto {
   @IsOptional()
   @IsBoolean()
   MAIL_ENABLED?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  ARTICLE_REJECTED?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  ARTICLE_APPROUVED?: boolean;
 }
