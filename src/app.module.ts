@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { join } from 'path';
-import { AppGateway } from 'src/app.getway';
+import { AppGateway } from 'src/app.gateway';
 import { ArticleRatingsModule } from 'src/articles/article-ratings.module';
 import { CartModule } from 'src/cart/cart.module';
 import { CategoriesModule } from 'src/categories/categories.module';

@@ -13,7 +13,7 @@ import PDFDocument from 'pdfkit';
 import { KeycloakAuthGuard } from 'src/auth/keycloak-auth.guard';
 import { CurrentUser } from 'src/auth/user.decorator';
 import type { JwtUser } from 'src/auth/user.type';
-import { UpdateOrderStatusDto } from 'src/orders/dto/update-order-status.tdo';
+import { UpdateOrderStatusDto } from 'src/orders/dto/update-order-status.dto';
 import { OrdersService } from './orders.service';
 
 @UseGuards(KeycloakAuthGuard)
