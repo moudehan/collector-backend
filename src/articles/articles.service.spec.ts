@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
+import type { File as MulterFile } from 'multer';
 
 import { ArticlesService } from './articles.service';
 
@@ -11,7 +12,10 @@ import { Article, ArticleStatus } from 'src/articles/article.entity';
 import { PriceHistory } from 'src/articles/price-history.entity';
 import { User, UserRole } from 'src/users/user.entity';
 
-import { Notification } from 'src/notifications/notification.entity';
+import {
+  Notification,
+  NotificationType,
+} from 'src/notifications/notification.entity';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { CreateArticleDto } from 'src/articles/dto/create-article.dto';
 import { UpdateArticleDto } from 'src/articles/dto/update-article.dto';
@@ -56,7 +60,7 @@ describe('ArticlesService', () => {
       findOne: jest.fn(),
       insert: jest.fn(),
       createQueryBuilder: jest.fn(),
-      find: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
       delete: jest.fn(),
     };
 
@@ -812,6 +816,404 @@ describe('ArticlesService', () => {
 
       const res = await service.getRecommendations('uX', 'user');
       expect(res.length).toBe(1);
+    });
+
+    it('returns recommendations for admin (includes own articles if liked)', async () => {
+      (articleLikeRepo.find as jest.Mock).mockResolvedValueOnce([
+        { article: { id: 'a1', category: { id: 'c1' } } },
+        { article: { id: 'a2', category: { id: 'c1' } } },
+      ] as Partial<ArticleLike>[]);
+
+      const qb: Partial<SelectQueryBuilder<Article>> = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([
+          { id: 'a1', seller: { id: 'admin-id' }, likesCount: 10 },
+          { id: 'a3', seller: { id: 'admin-id' }, likesCount: 5 },
+        ]),
+      } as Partial<SelectQueryBuilder<Article>>;
+      (articleRepo.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+
+      const res = await service.getRecommendations('admin-id', 'admin');
+      expect(res.length).toBe(1);
+      expect(res[0].id).toBe('a3');
+    });
+
+    it('sorts recommendations by likesCount', async () => {
+      (articleLikeRepo.find as jest.Mock).mockResolvedValueOnce([
+        { article: { id: 'x', category: { id: 'c1' } } },
+        { article: { id: 'y', category: { id: 'c1' } } },
+      ] as Partial<ArticleLike>[]);
+
+      const qb: Partial<SelectQueryBuilder<Article>> = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([
+          { id: 'low', likesCount: 1, seller: { id: 's' } },
+          { id: 'high', likesCount: 10, seller: { id: 's' } },
+          { id: 'none', seller: { id: 's' } },
+        ]),
+      } as Partial<SelectQueryBuilder<Article>>;
+      (articleRepo.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+
+      const res = await service.getRecommendations('u', 'user');
+      expect(res[0].id).toBe('high');
+      expect(res[1].id).toBe('low');
+      expect(res[2].id).toBe('none');
+    });
+  });
+
+  describe('Additional coverage for ArticlesService', () => {
+    it('computeModerationReasons via create: should trap multiple validation errors', async () => {
+      const shop = {
+        id: 's1',
+        owner: { id: 'u1' },
+      } as unknown as Shop;
+      (articleRepo.manager as unknown as EntityManager).getRepository = jest
+        .fn()
+        .mockReturnValue({
+          findOne: jest.fn().mockResolvedValue(shop),
+        });
+      (articleRepo.findOne as jest.Mock).mockResolvedValue(null);
+      (articleRepo.create as jest.Mock).mockReturnValue({});
+      (articleRepo.save as jest.Mock).mockResolvedValue({ id: 'a1' });
+
+      const badDto = {
+        title: 'Shrt',
+        description: 'Too short',
+        price: 999999,
+        shipping_cost: 101,
+        shopId: 's1',
+        categoryId: 'c1',
+        quantity: 1000,
+        productionYear: 1800,
+      } as unknown as CreateArticleDto;
+
+      await service.create(badDto, [], 'u1');
+
+      expect(articleRepo.update).toHaveBeenCalledWith(
+        'a1',
+        expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          moderation_reasons: expect.arrayContaining([
+            expect.stringContaining('Titre trop court'),
+            expect.stringContaining('Description trop courte'),
+            expect.stringContaining('Prix trop élevé'),
+            expect.stringContaining('Frais de livraison trop élevés'),
+            expect.stringContaining('Quantité trop élevée'),
+            expect.stringContaining('Année de production invalide'),
+          ]),
+        }),
+      );
+    });
+
+    it('computeModerationReasons: price, shipping, quantity non-numeric or invalid types', async () => {
+      const shop = { id: 's1', owner: { id: 'u1' } } as unknown as Shop;
+      (articleRepo.manager as unknown as EntityManager).getRepository = jest
+        .fn()
+        .mockReturnValue({
+          findOne: jest.fn().mockResolvedValue(shop),
+        });
+      (articleRepo.findOne as jest.Mock).mockResolvedValue(null);
+      (articleRepo.create as jest.Mock).mockReturnValue({});
+      (articleRepo.save as jest.Mock).mockResolvedValue({ id: 'a2' });
+
+      const weirdDto = {
+        title: 'Valid title',
+        description: 'Valid description that is long enough',
+        price: Number.NaN,
+        shipping_cost: -1,
+        quantity: 1.5,
+        shopId: 's1',
+        categoryId: 'c1',
+        productionYear: 'Classic',
+      } as unknown as CreateArticleDto;
+
+      await service.create(weirdDto, [], 'u1');
+
+      expect(articleRepo.update).toHaveBeenCalledWith(
+        'a2',
+        expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          moderation_reasons: expect.arrayContaining([
+            'Prix invalide (non numérique).',
+            'Frais de livraison invalides (doivent être ≥ 0).',
+            'Quantité invalide (doit être un entier).',
+            'Année de production invalide.',
+          ]),
+        }),
+      );
+    });
+
+    it('create handles shipping > price', async () => {
+      (articleRepo.save as jest.Mock).mockResolvedValueOnce({ id: 'a3' });
+      const dto = {
+        title: 'Valid title',
+        description: 'Valid description that is long enough',
+        price: 10,
+        shipping_cost: 20,
+        shopId: 's1',
+        categoryId: 'c1',
+      } as unknown as CreateArticleDto;
+
+      (articleRepo.manager as unknown as EntityManager).getRepository = jest
+        .fn()
+        .mockReturnValue({
+          findOne: jest.fn().mockResolvedValue({
+            id: 's1',
+            owner: { id: 'u1' },
+          } as unknown as Shop),
+        });
+      (articleRepo.findOne as jest.Mock).mockResolvedValue(null);
+
+      await service.create(dto, [], 'u1');
+      expect(articleRepo.update).toHaveBeenCalledWith(
+        'a3',
+        expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          moderation_reasons: expect.arrayContaining([
+            'Frais de livraison incohérents (supérieurs au prix).',
+          ]),
+        }),
+      );
+    });
+
+    it('create handles fraud check failure (catch block)', async () => {
+      const shop = { id: 's1', owner: { id: 'u1' } } as unknown as Shop;
+      (articleRepo.manager as unknown as EntityManager).getRepository = jest
+        .fn()
+        .mockReturnValue({
+          findOne: jest.fn().mockResolvedValue(shop),
+        });
+      (articleRepo.findOne as jest.Mock).mockResolvedValue(null);
+      (articleRepo.save as jest.Mock).mockResolvedValue({ id: 'a-fraud' });
+      (fraudService.checkPriceAnomaly as jest.Mock).mockRejectedValueOnce(
+        new Error('fraud failed'),
+      );
+
+      const dto = {
+        title: 'Safe Title Original',
+        description: 'Actually this description is now long enough for real.',
+        price: 100,
+        shipping_cost: 5,
+        shopId: 's1',
+        categoryId: 'c1',
+      } as unknown as CreateArticleDto;
+
+      await service.create(
+        dto,
+        [{ filename: 'x.jpg' }] as unknown as MulterFile[],
+        'u1',
+      );
+      expect(articleRepo.update).toHaveBeenCalledWith(
+        'a-fraud',
+        expect.objectContaining({
+          moderation_reasons: [
+            'Anomalie de prix détectée : validation manuelle requise.',
+          ],
+        }),
+      );
+    });
+
+    it('findOneById: handles missing userId and missing likes', async () => {
+      const article = { id: 'a1', likes: null } as unknown as Article;
+      const qb = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(article),
+      } as unknown as SelectQueryBuilder<Article>;
+      (articleRepo.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+
+      const res = await service.findOneById('a1');
+      expect(res?.isFavorite).toBe(false);
+      expect(res?.userRating).toBeNull();
+    });
+
+    it('privateCatalogue: covers branches for userId and categoryId', async () => {
+      const qbMocks = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([{ id: 'a1', likes: [] }]),
+      };
+      (articleRepo.createQueryBuilder as jest.Mock).mockReturnValue(qbMocks);
+
+      await service.privateCatalogue('cat-1', 'user-1');
+      expect(qbMocks.andWhere).toHaveBeenCalledWith(
+        'seller.id != :userId',
+        expect.anything(),
+      );
+    });
+
+    it('updateArticle: previousStatus REJECTED resets rejection fields', async () => {
+      const existing = {
+        id: 'a1',
+        seller: { id: 'u1' },
+        status: ArticleStatus.REJECTED,
+        rejection_reason: 'Bad',
+        rejected_at: new Date(),
+        images: [{ id: 'img1' }],
+      } as unknown as Article;
+      (articleRepo.findOne as jest.Mock).mockResolvedValue(existing);
+      (articleLikeRepo.find as jest.Mock).mockResolvedValue([]);
+
+      await service.updateArticle(
+        'a1',
+        { title: 'New Valid Title' } as unknown as UpdateArticleDto,
+        [],
+        'u1',
+      );
+    });
+
+    it('updateArticle: emits notifications to followers', async () => {
+      const existing = {
+        id: 'a-notif',
+        seller: { id: 'u1' },
+        status: ArticleStatus.APPROVED,
+        price: 100,
+        images: [{ id: 'img1' }],
+      } as unknown as Article;
+      (articleRepo.findOne as jest.Mock)
+        .mockResolvedValueOnce(existing)
+        .mockResolvedValueOnce({
+          ...existing,
+          title: 'Updated Valid Title',
+        } as unknown as Article);
+
+      (articleLikeRepo.find as jest.Mock).mockResolvedValue([
+        {
+          user: { id: 'follower-1' },
+          article: { id: 'a-notif' },
+        } as unknown as ArticleLike,
+      ]);
+      (notificationsService.send as jest.Mock).mockResolvedValue({
+        id: 'n1',
+        payload: { message: 'm' },
+      });
+
+      await service.updateArticle(
+        'a-notif',
+        { title: 'Updated Valid Title' } as unknown as UpdateArticleDto,
+        [],
+        'u1',
+      );
+
+      expect(notificationsService.send).toHaveBeenCalledWith(
+        'follower-1',
+        NotificationType.ARTICLE_UPDATED,
+        expect.anything(),
+        'u1',
+      );
+      expect(articleGateway.emitNewArticleInterest).toHaveBeenCalled();
+    });
+
+    it('updateArticle: approval path (no moderation reasons)', async () => {
+      const existing = {
+        id: 'a-appr',
+        seller: { id: 'u1' },
+        status: ArticleStatus.PENDING,
+        price: 100,
+        images: [{ id: 'img1' }],
+      } as unknown as Article;
+
+      (articleRepo.findOne as jest.Mock)
+        .mockResolvedValueOnce(existing)
+        .mockResolvedValueOnce({
+          ...existing,
+          title: 'VldTitle',
+          description: 'Valid description that is long enough.',
+          status: ArticleStatus.APPROVED,
+          images: [{ id: 'img1' }],
+          shipping_cost: 0,
+          quantity: 1,
+        } as unknown as Article);
+
+      (articleLikeRepo.find as jest.Mock).mockResolvedValue([]);
+      (notificationsService.send as jest.Mock).mockResolvedValue({ id: 'n2' });
+
+      await service.updateArticle(
+        'a-appr',
+        { title: 'VldTitle' } as unknown as UpdateArticleDto,
+        [],
+        'u1',
+      );
+
+      expect(notificationsService.send).toHaveBeenCalledWith(
+        'u1',
+        NotificationType.ARTICLE_APPROUVED,
+        expect.anything(),
+        'u1',
+      );
+    });
+
+    it('updateArticle: priceCheckDone=false path with priceCheckAnomaly call', async () => {
+      const existing = {
+        id: 'a-pcd-false',
+        seller: { id: 'u1' },
+        status: ArticleStatus.APPROVED,
+        price: 100,
+        images: [{ id: 'img1' }],
+        title: 'Title Valid',
+        description: 'Description....................',
+        shipping_cost: 0,
+        quantity: 1,
+      } as unknown as Article;
+
+      (articleRepo.findOne as jest.Mock)
+        .mockResolvedValueOnce(existing)
+        .mockResolvedValueOnce(existing);
+
+      (articleLikeRepo.find as jest.Mock).mockResolvedValue([]);
+
+      await service.updateArticle(
+        'a-pcd-false',
+        {
+          description: 'Updated Desc Long Enough',
+        } as unknown as UpdateArticleDto,
+        [],
+        'u1',
+      );
+      expect(fraudService.checkPriceAnomaly).toHaveBeenCalledWith(
+        'a-pcd-false',
+        100,
+      );
+    });
+
+    it('approve/reject/updateArticle: handles null savedNotif', async () => {
+      (notificationsService.send as jest.Mock).mockResolvedValue(null);
+      (articleRepo.findOne as jest.Mock).mockResolvedValue({
+        id: 'a1',
+        seller: { id: 's1' },
+        status: ArticleStatus.PENDING,
+        category: { id: 'c1' },
+        images: [{ id: 'img1' }],
+        title: 'T Valid',
+        description: 'D...........................',
+        price: 10,
+        shipping_cost: 0,
+        quantity: 1,
+      } as unknown as Article);
+      (articleLikeRepo.createQueryBuilder as jest.Mock).mockReturnValue({
+        leftJoin: jest.fn().mockReturnThis(),
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        having: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([{ userId: 'u2', total: 5 }]),
+      } as unknown as SelectQueryBuilder<ArticleLike>);
+
+      await service.approve('a1');
+      expect(articleGateway.emitNewArticleInterest).not.toHaveBeenCalled();
     });
   });
 });

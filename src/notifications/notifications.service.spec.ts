@@ -64,13 +64,60 @@ describe('NotificationsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('returns null when setting disables notification', async () => {
+    it('returns null when NEW_ARTICLE disabled', async () => {
       (settingsService.getOrCreate as jest.Mock).mockResolvedValueOnce({
         NEW_ARTICLE: false,
-        MAIL_ENABLED: false,
       });
       const res = await service.send('u1', NotificationType.NEW_ARTICLE);
       expect(res).toBeNull();
+    });
+
+    it('returns null when ARTICLE_UPDATED disabled', async () => {
+      (settingsService.getOrCreate as jest.Mock).mockResolvedValueOnce({
+        ARTICLE_UPDATED: false,
+      });
+      const res = await service.send('u1', NotificationType.ARTICLE_UPDATED);
+      expect(res).toBeNull();
+    });
+
+    it('returns null when ARTICLE_REJECTED disabled', async () => {
+      (settingsService.getOrCreate as jest.Mock).mockResolvedValueOnce({
+        ARTICLE_REJECTED: false,
+      });
+      const res = await service.send('u1', NotificationType.ARTICLE_REJECTED);
+      expect(res).toBeNull();
+    });
+
+    it('returns null when ARTICLE_APPROUVED disabled', async () => {
+      (settingsService.getOrCreate as jest.Mock).mockResolvedValueOnce({
+        ARTICLE_APPROUVED: false,
+      });
+      const res = await service.send('u1', NotificationType.ARTICLE_APPROUVED);
+      expect(res).toBeNull();
+    });
+
+    it('continues when ARTICLE_UPDATED enabled', async () => {
+      (settingsService.getOrCreate as jest.Mock).mockResolvedValueOnce({
+        ARTICLE_UPDATED: true,
+      });
+      const res = await service.send('u1', NotificationType.ARTICLE_UPDATED);
+      expect(res).not.toBeNull();
+    });
+
+    it('continues when ARTICLE_REJECTED enabled', async () => {
+      (settingsService.getOrCreate as jest.Mock).mockResolvedValueOnce({
+        ARTICLE_REJECTED: true,
+      });
+      const res = await service.send('u1', NotificationType.ARTICLE_REJECTED);
+      expect(res).not.toBeNull();
+    });
+
+    it('continues when ARTICLE_APPROUVED enabled', async () => {
+      (settingsService.getOrCreate as jest.Mock).mockResolvedValueOnce({
+        ARTICLE_APPROUVED: true,
+      });
+      const res = await service.send('u1', NotificationType.ARTICLE_APPROUVED);
+      expect(res).not.toBeNull();
     });
 
     it('creates, saves, emits and not sends mail when MAIL_ENABLED false', async () => {
@@ -103,6 +150,25 @@ describe('NotificationsService', () => {
       expect(res).toEqual(saved);
     });
 
+    it('creates without createdBy when not provided', async () => {
+      const created = {
+        user: { id: 'u2' },
+        type: NotificationType.NEW_ARTICLE,
+      } as Partial<Notification>;
+      const saved = { id: 'n2', ...created } as Partial<Notification>;
+      (repo.create as jest.Mock).mockReturnValue(created);
+      (repo.save as jest.Mock).mockResolvedValue(saved);
+
+      await service.send('u2', NotificationType.NEW_ARTICLE);
+
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          created_by: undefined,
+          payload: {},
+        }),
+      );
+    });
+
     it('sends mail when MAIL_ENABLED true', async () => {
       (settingsService.getOrCreate as jest.Mock).mockResolvedValueOnce({
         NEW_ARTICLE: true,
@@ -127,6 +193,24 @@ describe('NotificationsService', () => {
       ).toHaveBeenCalledWith('u3', NotificationType.NEW_ARTICLE, { x: 1 });
       expect(res).toEqual(saved);
     });
+
+    it('handles mail service failure gracefully', async () => {
+      (settingsService.getOrCreate as jest.Mock).mockResolvedValueOnce({
+        NEW_ARTICLE: true,
+        MAIL_ENABLED: true,
+      });
+      (mailService.sendNotificationMail as jest.Mock).mockRejectedValueOnce(
+        new Error('mail error'),
+      );
+
+      const created = { id: 'n4' };
+      (repo.create as jest.Mock).mockReturnValue(created);
+      (repo.save as jest.Mock).mockResolvedValue(created);
+
+      const res = await service.send('u4', NotificationType.NEW_ARTICLE);
+      expect(res).toEqual(created);
+      // If we are here without crash, catch() worked
+    });
   });
 
   describe('mark methods', () => {
@@ -149,6 +233,12 @@ describe('NotificationsService', () => {
       expect(res.affected).toEqual(5);
     });
 
+    it('markAllAsRead returns 0 when affected is null', async () => {
+      (repo.update as jest.Mock).mockResolvedValue({ affected: null });
+      const res = await service.markAllAsRead('user-4');
+      expect(res.affected).toEqual(0);
+    });
+
     it('markAllAsUnread throws when no userId', async () => {
       await expect(service.markAllAsUnread('')).rejects.toThrow(
         BadRequestException,
@@ -159,6 +249,12 @@ describe('NotificationsService', () => {
       (repo.update as jest.Mock).mockResolvedValue({ affected: 7 });
       const res = await service.markAllAsUnread('user-5');
       expect(res.affected).toEqual(7);
+    });
+
+    it('markAllAsUnread returns 0 when affected is null', async () => {
+      (repo.update as jest.Mock).mockResolvedValue({ affected: undefined });
+      const res = await service.markAllAsUnread('user-5');
+      expect(res.affected).toEqual(0);
     });
   });
 });
