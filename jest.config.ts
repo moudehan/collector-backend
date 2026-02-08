@@ -9,6 +9,7 @@ module.exports = {
   collectCoverageFrom: [
     '**/*.(t|j)s',
     '!**/controllers/**',
+    '!src/*.entity.ts',
     '!**/*.controller.ts',
     '!**/*.controller.spec.ts',
     '!**/*.module.ts',
