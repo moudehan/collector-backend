@@ -9,12 +9,16 @@ import { CartItem } from 'src/cart/cart-item.entity';
 import { ShippingAddress } from 'src/shipping-adress/shipping-adress.entity';
 import { OrderMailService } from './order-mail.service';
 import { createMockRepository } from '../../test/utils/mock-repository';
+import { ArticlesService } from 'src/articles/articles.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
   const orderRepo = createMockRepository();
   const orderItemRepo = createMockRepository();
-  const articleRepo = createMockRepository();
+  const articlesService = {
+    findManyByIds: jest.fn(),
+    decreaseStock: jest.fn(),
+  };
   const mailService = {
     sendOrderConfirmation: jest.fn(),
     sendOrderStatusUpdated: jest.fn(),
@@ -26,7 +30,7 @@ describe('OrdersService', () => {
         OrdersService,
         { provide: getRepositoryToken(Order), useValue: orderRepo },
         { provide: getRepositoryToken(OrderItem), useValue: orderItemRepo },
-        { provide: getRepositoryToken(Article), useValue: articleRepo },
+        { provide: ArticlesService, useValue: articlesService },
         { provide: OrderMailService, useValue: mailService },
       ],
     }).compile();
@@ -103,10 +107,10 @@ describe('OrdersService', () => {
 
     cart.items.push(cartItem);
 
-    (articleRepo.find as jest.Mock)
+    articlesService.findManyByIds
       .mockResolvedValueOnce([articleEntity])
       .mockResolvedValueOnce([articleEntity]);
-    (articleRepo.save as jest.Mock).mockResolvedValueOnce([articleEntity]);
+    articlesService.decreaseStock.mockResolvedValue(articleEntity);
 
     const savedOrder: Partial<Order> = { id: 'o1', items: [] };
     (orderRepo.create as jest.Mock).mockReturnValueOnce({} as Order);

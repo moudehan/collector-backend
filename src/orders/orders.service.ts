@@ -6,10 +6,10 @@ import {
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
-import { Article } from 'src/articles/article.entity';
+import { ArticlesService } from 'src/articles/articles.service';
 import type { Cart } from 'src/cart/cart.entity';
 import { ShippingAddress } from 'src/shipping-adress/shipping-adress.entity';
-import { In, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { OrderItem } from './order-item.entity';
 import { OrderMailService } from './order-mail.service';
 import { OrderStatus } from './order-status.enum';
@@ -50,8 +50,7 @@ export class OrdersService {
     private readonly orderRepo: Repository<Order>,
     @InjectRepository(OrderItem)
     private readonly orderItemRepo: Repository<OrderItem>,
-    @InjectRepository(Article)
-    private readonly articleRepo: Repository<Article>,
+    private readonly articlesService: ArticlesService,
     private readonly orderMailService: OrderMailService,
   ) {}
 
@@ -73,10 +72,7 @@ export class OrdersService {
 
     const uniqueIds = Array.from(new Set(articleIds));
 
-    const articles = await this.articleRepo.find({
-      where: { id: In(uniqueIds) },
-      relations: ['shop', 'shop.owner'],
-    });
+    const articles = await this.articlesService.findManyByIds(uniqueIds);
 
     const map = new Map<string, OrderArticleSnapshot>();
 
@@ -147,9 +143,7 @@ export class OrdersService {
 
     const articleIds = Array.from(orderedByArticle.keys());
 
-    const articles = await this.articleRepo.find({
-      where: { id: In(articleIds) },
-    });
+    const articles = await this.articlesService.findManyByIds(articleIds);
 
     if (articles.length !== articleIds.length) {
       throw new NotFoundException(
@@ -159,20 +153,8 @@ export class OrdersService {
 
     for (const art of articles) {
       const orderedQty = orderedByArticle.get(art.id) ?? 0;
-
-      const currentStock =
-        typeof art.quantity === 'number' && art.quantity > 0 ? art.quantity : 0;
-
-      if (currentStock < orderedQty) {
-        throw new BadRequestException(
-          `Stock insuffisant pour l'article "${art.title}". Disponible : ${currentStock}, demandé : ${orderedQty}`,
-        );
-      }
-
-      art.quantity = currentStock - orderedQty;
+      await this.articlesService.decreaseStock(art.id, orderedQty);
     }
-
-    await this.articleRepo.save(articles);
 
     const order = this.orderRepo.create({
       userId,

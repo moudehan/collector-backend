@@ -18,8 +18,9 @@ import {
 } from 'src/notifications/notification.entity';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { Shop } from 'src/shops/shop.entity';
+import { ShopsService } from 'src/shops/shops.service';
 import { User } from 'src/users/user.entity';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ArticleImage } from './article-image.entity';
 import { ArticleLike } from './article-like.entity';
 import { Article, ArticleStatus } from './article.entity';
@@ -31,12 +32,12 @@ export class ArticlesService {
     @InjectRepository(Article) private repo: Repository<Article>,
     @InjectRepository(PriceHistory) private priceRepo: Repository<PriceHistory>,
     @InjectRepository(ArticleLike) private likeRepo: Repository<ArticleLike>,
-    @InjectRepository(Notification) private notifRepo: Repository<Notification>,
     private fraudService: FraudService,
     @InjectRepository(ArticleImage)
     private imgRepo: Repository<ArticleImage>,
     private readonly articleGateway: ArticleGateway,
     private readonly notificationsService: NotificationsService,
+    private readonly shopsService: ShopsService,
     @InjectRepository(ArticleRating)
     private readonly articleRatingRepo: Repository<ArticleRating>,
   ) {}
@@ -136,10 +137,7 @@ export class ArticlesService {
       throw new BadRequestException({ message: 'shopId est requis' });
     }
 
-    const shop = await this.repo.manager.getRepository(Shop).findOne({
-      where: { id: dto.shopId },
-      relations: ['owner'],
-    });
+    const shop = await this.shopsService.getShopById(dto.shopId);
 
     if (!shop) {
       throw new NotFoundException('Boutique introuvable');
@@ -596,11 +594,12 @@ export class ArticlesService {
     });
 
     for (const f of followers) {
-      await this.notifRepo.save({
-        user: { id: f.user.id },
-        type: NotificationType.PRICE_UPDATE,
-        payload: { articleId, newPrice },
-      });
+      this.notificationsService
+        .send(f.user.id, NotificationType.PRICE_UPDATE, {
+          articleId,
+          newPrice,
+        })
+        .catch(console.error);
     }
 
     return {
@@ -849,6 +848,34 @@ export class ArticlesService {
       where: { id: updated.id },
       relations: ['images', 'category', 'shop', 'seller'],
     });
+  }
+
+  async findManyByIds(ids: string[]) {
+    return this.repo.find({
+      where: { id: In(ids) },
+      relations: ['shop', 'shop.owner'],
+    });
+  }
+
+  async decreaseStock(articleId: string, quantityToReduce: number) {
+    const article = await this.repo.findOne({ where: { id: articleId } });
+    if (!article) {
+      throw new NotFoundException(`Article ${articleId} introuvable`);
+    }
+
+    const currentStock =
+      typeof article.quantity === 'number' && article.quantity > 0
+        ? article.quantity
+        : 0;
+
+    if (currentStock < quantityToReduce) {
+      throw new BadRequestException(
+        `Stock insuffisant pour l'article "${article.title}".`,
+      );
+    }
+
+    article.quantity = currentStock - quantityToReduce;
+    return this.repo.save(article);
   }
 
   async getRecommendations(userId: string, userRole: string) {

@@ -10,5 +10,6 @@ import { ShopsService } from './shops.service';
   imports: [TypeOrmModule.forFeature([Shop, ShopRating]), UsersModule],
   controllers: [ShopsController],
   providers: [ShopsService],
+  exports: [ShopsService],
 })
 export class ShopsModule {}
