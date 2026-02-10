@@ -7,7 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtUser } from 'src/auth/user.type';
-import { FraudAlert } from 'src/fraud/fraud-alert.entity';
+import { FraudService } from 'src/fraud/fraud.service';
 import { DeepPartial, Repository } from 'typeorm';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User, UserRole } from './user.entity';
@@ -33,8 +33,7 @@ export class UsersService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
 
-    @InjectRepository(FraudAlert)
-    private readonly alertRepo: Repository<FraudAlert>,
+    private readonly fraudService: FraudService,
   ) {}
 
   async findOrCreateFromKeycloak(
@@ -278,19 +277,6 @@ export class UsersService {
   }
 
   async isUserFraudulent(userId: string): Promise<boolean> {
-    const alerts = await this.alertRepo
-      .createQueryBuilder('alert')
-      .leftJoin('alert.article', 'a')
-      .leftJoin('a.seller', 'seller')
-      .leftJoin('a.shop', 'shop')
-      .leftJoin('shop.owner', 'owner')
-      .where('seller.id = :userId OR owner.id = :userId', { userId })
-      .getMany();
-
-    const fraudulentCount = alerts.filter(
-      (alert) => !alert.reason.toLowerCase().includes('utilisateur'),
-    ).length;
-
-    return fraudulentCount >= 2;
+    return this.fraudService.isUserFraudulent(userId);
   }
 }

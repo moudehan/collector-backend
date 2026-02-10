@@ -3,21 +3,22 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { UsersService } from './users.service';
 import { User, UserRole } from './user.entity';
 import { JwtUser } from 'src/auth/user.type';
-import { FraudAlert } from 'src/fraud/fraud-alert.entity';
-import { SelectQueryBuilder } from 'typeorm';
+import { FraudService } from 'src/fraud/fraud.service';
 import { createMockRepository } from '../../test/utils/mock-repository';
 
 describe('UsersService', () => {
   let service: UsersService;
   const userRepo = createMockRepository();
-  const alertRepo = createMockRepository();
+  const fraudService = {
+    isUserFraudulent: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
         { provide: getRepositoryToken(User), useValue: userRepo },
-        { provide: getRepositoryToken(FraudAlert), useValue: alertRepo },
+        { provide: FraudService, useValue: fraudService },
       ],
     }).compile();
 
@@ -217,18 +218,11 @@ describe('UsersService', () => {
   });
 
   describe('isUserFraudulent', () => {
-    it('calculates fraudulent based on alerts', async () => {
-      const qb = {
-        leftJoin: jest.fn().mockReturnThis(),
-        leftJoinAndSelect: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getMany: jest
-          .fn()
-          .mockResolvedValue([{ reason: 'foo' }, { reason: 'bar' }]),
-      } as Partial<SelectQueryBuilder<FraudAlert>>;
-      (alertRepo.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+    it('calls fraudService.isUserFraudulent', async () => {
+      fraudService.isUserFraudulent.mockResolvedValueOnce(true);
       const res = await service.isUserFraudulent('uX');
       expect(res).toBe(true);
+      expect(fraudService.isUserFraudulent).toHaveBeenCalledWith('uX');
     });
   });
 });

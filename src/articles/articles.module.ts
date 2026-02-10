@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FraudModule } from 'src/fraud/fraud.module';
 import { Notification } from 'src/notifications/notification.entity';
 import { NotificationsModule } from 'src/notifications/notifications.module';
+import { ShopsModule } from 'src/shops/shops.module';
 import { ArticleImage } from './article-image.entity';
 import { ArticleLike } from './article-like.entity';
 import { ArticleRating } from './article-rating.entity';
@@ -18,12 +19,12 @@ import { PriceHistory } from './price-history.entity';
       Article,
       PriceHistory,
       ArticleLike,
-      Notification,
       ArticleImage,
       ArticleRating,
     ]),
     FraudModule,
     NotificationsModule,
+    ShopsModule,
   ],
   controllers: [ArticlesController],
   providers: [ArticlesService, ArticleGateway],

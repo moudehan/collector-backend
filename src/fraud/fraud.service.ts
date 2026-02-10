@@ -200,6 +200,23 @@ export class FraudService {
       affected: result.affected ?? 0,
     };
   }
+  async isUserFraudulent(userId: string): Promise<boolean> {
+    const userAlerts = await this.alertRepo
+      .createQueryBuilder('alert')
+      .leftJoin('alert.article', 'a')
+      .leftJoin('a.seller', 'seller')
+      .leftJoin('a.shop', 'shop')
+      .leftJoin('shop.owner', 'owner')
+      .where('seller.id = :userId OR owner.id = :userId', { userId })
+      .getMany();
+
+    const fraudulentCount = userAlerts.filter(
+      (a) => !a.reason.toLowerCase().includes('utilisateur'),
+    ).length;
+
+    return fraudulentCount >= 2;
+  }
+
   async deleteAlertsByArticleId(articleId: string): Promise<void> {
     await this.alertRepo.delete({ article: { id: articleId } });
   }

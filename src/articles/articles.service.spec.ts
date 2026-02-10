@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import type { File as MulterFile } from 'multer';
 
 import { ArticlesService } from './articles.service';
@@ -23,6 +23,7 @@ import { Shop } from 'src/shops/shop.entity';
 
 import { ArticleGateway } from 'src/articles/article.gateway';
 import { FraudService } from 'src/fraud/fraud.service';
+import { ShopsService } from 'src/shops/shops.service';
 
 describe('ArticlesService', () => {
   let service: ArticlesService;
@@ -30,12 +31,12 @@ describe('ArticlesService', () => {
   let articleRepo: Partial<Repository<Article>>;
   let priceHistoryRepo: Partial<Repository<PriceHistory>>;
   let articleLikeRepo: Partial<Repository<ArticleLike>>;
-  let notificationRepo: Partial<Repository<Notification>>;
   let articleImageRepo: Partial<Repository<ArticleImage>>;
   let articleRatingRepo: Partial<Repository<ArticleRating>>;
   let fraudService: Partial<FraudService>;
   let articleGateway: Partial<ArticleGateway>;
   let notificationsService: Partial<NotificationsService>;
+  let shopsService: Partial<ShopsService>;
 
   beforeEach(async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -64,7 +65,6 @@ describe('ArticlesService', () => {
       delete: jest.fn(),
     };
 
-    notificationRepo = { save: jest.fn() };
     articleImageRepo = {
       delete: jest.fn(),
       create: jest.fn(),
@@ -81,7 +81,11 @@ describe('ArticlesService', () => {
     };
 
     notificationsService = {
-      send: jest.fn(),
+      send: jest.fn().mockResolvedValue({}),
+    };
+
+    shopsService = {
+      getShopById: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -98,10 +102,6 @@ describe('ArticlesService', () => {
         {
           provide: getRepositoryToken(ArticleLike),
           useValue: articleLikeRepo,
-        },
-        {
-          provide: getRepositoryToken(Notification),
-          useValue: notificationRepo,
         },
         {
           provide: getRepositoryToken(ArticleImage),
@@ -122,6 +122,10 @@ describe('ArticlesService', () => {
         {
           provide: NotificationsService,
           useValue: notificationsService,
+        },
+        {
+          provide: ShopsService,
+          useValue: shopsService,
         },
       ],
     }).compile();
@@ -180,10 +184,7 @@ describe('ArticlesService', () => {
         updated_at: new Date(),
       },
     } as Shop;
-    (articleRepo.manager as import('typeorm').EntityManager).getRepository =
-      jest.fn().mockReturnValue({
-        findOne: jest.fn().mockResolvedValue(shop),
-      });
+    (shopsService.getShopById as jest.Mock).mockResolvedValue(shop);
 
     const savedArticle: Partial<Article> = { id: 'a2' };
 
@@ -295,10 +296,7 @@ describe('ArticlesService', () => {
     });
 
     it('throws if shop not found', async () => {
-      (articleRepo.manager as import('typeorm').EntityManager).getRepository =
-        jest
-          .fn()
-          .mockReturnValue({ findOne: jest.fn().mockResolvedValue(undefined) });
+      (shopsService.getShopById as jest.Mock).mockResolvedValue(undefined);
 
       const dtoShopMissing = {
         title: 't',
@@ -315,10 +313,7 @@ describe('ArticlesService', () => {
         id: 'sX',
         owner: { id: 'owner-1' } as Partial<User>,
       } as Shop;
-      (articleRepo.manager as import('typeorm').EntityManager).getRepository =
-        jest
-          .fn()
-          .mockReturnValue({ findOne: jest.fn().mockResolvedValue(shop) });
+      (shopsService.getShopById as jest.Mock).mockResolvedValue(shop);
 
       const dtoNotOwner = {
         title: 't',
@@ -333,10 +328,7 @@ describe('ArticlesService', () => {
     it('throws when an article with same title exists', async () => {
       const owner2 = { id: 'u2' };
       const shop: Shop = { id: 's2', owner: owner2 } as Shop;
-      (articleRepo.manager as import('typeorm').EntityManager).getRepository =
-        jest
-          .fn()
-          .mockReturnValue({ findOne: jest.fn().mockResolvedValue(shop) });
+      (shopsService.getShopById as jest.Mock).mockResolvedValue(shop);
 
       (articleRepo.findOne as jest.Mock).mockResolvedValueOnce({
         id: 'exists',
@@ -614,13 +606,10 @@ describe('ArticlesService', () => {
       (articleLikeRepo.find as jest.Mock).mockResolvedValueOnce([
         { user: { id: 'u10' } },
       ] as Partial<ArticleLike>[]);
-      (notificationRepo.save as jest.Mock).mockResolvedValue(
-        {} as Partial<Notification>,
-      );
 
       const res = await service.updatePrice('a8', 7);
       expect(res.success).toBe(true);
-      expect(notificationRepo.save).toHaveBeenCalled();
+      expect(notificationsService.send).toHaveBeenCalled();
     });
   });
 
@@ -871,11 +860,7 @@ describe('ArticlesService', () => {
         id: 's1',
         owner: { id: 'u1' },
       } as unknown as Shop;
-      (articleRepo.manager as unknown as EntityManager).getRepository = jest
-        .fn()
-        .mockReturnValue({
-          findOne: jest.fn().mockResolvedValue(shop),
-        });
+      (shopsService.getShopById as jest.Mock).mockResolvedValue(shop);
       (articleRepo.findOne as jest.Mock).mockResolvedValue(null);
       (articleRepo.create as jest.Mock).mockReturnValue({});
       (articleRepo.save as jest.Mock).mockResolvedValue({ id: 'a1' });
@@ -911,11 +896,7 @@ describe('ArticlesService', () => {
 
     it('computeModerationReasons: price, shipping, quantity non-numeric or invalid types', async () => {
       const shop = { id: 's1', owner: { id: 'u1' } } as unknown as Shop;
-      (articleRepo.manager as unknown as EntityManager).getRepository = jest
-        .fn()
-        .mockReturnValue({
-          findOne: jest.fn().mockResolvedValue(shop),
-        });
+      (shopsService.getShopById as jest.Mock).mockResolvedValue(shop);
       (articleRepo.findOne as jest.Mock).mockResolvedValue(null);
       (articleRepo.create as jest.Mock).mockReturnValue({});
       (articleRepo.save as jest.Mock).mockResolvedValue({ id: 'a2' });
@@ -958,14 +939,10 @@ describe('ArticlesService', () => {
         categoryId: 'c1',
       } as unknown as CreateArticleDto;
 
-      (articleRepo.manager as unknown as EntityManager).getRepository = jest
-        .fn()
-        .mockReturnValue({
-          findOne: jest.fn().mockResolvedValue({
-            id: 's1',
-            owner: { id: 'u1' },
-          } as unknown as Shop),
-        });
+      (shopsService.getShopById as jest.Mock).mockResolvedValue({
+        id: 's1',
+        owner: { id: 'u1' },
+      } as unknown as Shop);
       (articleRepo.findOne as jest.Mock).mockResolvedValue(null);
 
       await service.create(dto, [], 'u1');
@@ -982,11 +959,7 @@ describe('ArticlesService', () => {
 
     it('create handles fraud check failure (catch block)', async () => {
       const shop = { id: 's1', owner: { id: 'u1' } } as unknown as Shop;
-      (articleRepo.manager as unknown as EntityManager).getRepository = jest
-        .fn()
-        .mockReturnValue({
-          findOne: jest.fn().mockResolvedValue(shop),
-        });
+      (shopsService.getShopById as jest.Mock).mockResolvedValue(shop);
       (articleRepo.findOne as jest.Mock).mockResolvedValue(null);
       (articleRepo.save as jest.Mock).mockResolvedValue({ id: 'a-fraud' });
       (fraudService.checkPriceAnomaly as jest.Mock).mockRejectedValueOnce(
