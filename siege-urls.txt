@@ -1,0 +1,14 @@
+# Auth
+http://localhost:8081/realms/collector/protocol/openid-connect/token POST grant_type=client_credentials&client_id=collector-api&client_secret=tEChCBaUIgQ5lmBJ8CC0RYk5hZkjLMQq
+
+# Creation Flow
+http://localhost:4000/admin/categories POST {"name": "Category Stress Test", "description": "Siege"}
+http://localhost:4000/shops POST {"name": "Shop Stress Test", "description": "Siege"}
+http://localhost:4000/articles POST {"title":"Article Stress Test","description":"Stress test body","price":99,"shipping_cost":10,"shopId":"5066a540-a205-4807-a7d3-6367ccede32e","categoryId":"57f53cc9-b15b-40e7-a4c3-b393bf5e4b64","quantity":10}
+
+# Browsing Flow
+http://localhost:4000/articles/public
+http://localhost:4000/articles
+http://localhost:4000/shops/my
+http://localhost:4000/articles/6c7ca4d8-ab85-47d3-899c-b389c0044bed
+http://localhost:4000/categories
